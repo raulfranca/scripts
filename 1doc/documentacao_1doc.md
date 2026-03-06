@@ -74,6 +74,9 @@ O 1Doc usa a biblioteca Select2 para campos de seleção múltipla, como **Marca
 * **Select Oculto Original (Alvo principal para jQuery):** `#marcadores_ids`
 * **Marcadores Ativos na Tela (Badges):** `.badge_marcador`
 
+> **⚠️ ATENÇÃO — Simulação visual de cliques no Select2 NÃO funciona de forma confiável.**
+> Simular `.select2-input.focus()` + `.click()` + `setTimeout` + `MouseEvent('mouseup')` foi testado e falha consistentemente (o marcador não é persistido). A **única abordagem confiável** é a injeção de `<script>` com jQuery descrita na seção 5.3 abaixo.
+
 ## 5. Snippets e Funções Padronizadas
 
 ### 5.1. Monitoramento Dinâmico de Carregamento (SPA)
@@ -226,6 +229,113 @@ elementoAlvo.classList.remove('highlight-target');
 setTimeout(() => elementoAlvo.classList.add('highlight-target'), 10);
 ```
 
+### 5.7. Comunicação Cross-Tab via GM_setValue/GM_getValue
+
+Scripts rodando em origens diferentes (`1doc.com.br` e `docs.google.com`) não compartilham `localStorage` — cada origem tem o seu isolado. A solução correta é `GM_setValue`/`GM_getValue`, cujo escopo é global à instância do TamperMonkey (independente de origem).
+
+**Convenção de chaves:** use o mesmo prefixo das chaves `localStorage` do projeto (ex: `1doc_cred_`), para manter rastreabilidade.
+
+**Padrão recomendado: timestamp + expiração**
+
+Sempre inclua um `timestamp: Date.now()` no payload e descarte dados mais antigos que um intervalo seguro (ex: 5 minutos) para evitar colagem acidental em sessões futuras.
+
+```javascript
+// === Script A (1doc.com.br) — escreve ===
+GM_setValue('1doc_cred_pending_paste', JSON.stringify({
+    credenciadora: 'Renata',
+    protocolo: '15.932/2026',
+    url: window.location.href,
+    candidato: 'João da Silva',
+    timestamp: Date.now()
+}));
+
+// === Script B (docs.google.com) — lê ===
+const EXPIRY_MS = 5 * 60 * 1000;
+
+function verificarDadosPendentes() {
+    const raw = GM_getValue('1doc_cred_pending_paste', '');
+    if (!raw) return null;
+
+    let dados;
+    try { dados = JSON.parse(raw); } catch (e) {
+        GM_setValue('1doc_cred_pending_paste', ''); // Limpa dado corrompido
+        return null;
+    }
+
+    if (!dados.timestamp || Date.now() - dados.timestamp > EXPIRY_MS) {
+        GM_setValue('1doc_cred_pending_paste', ''); // Descarta expirado
+        return null;
+    }
+
+    return dados;
+}
+```
+
+**Guard contra execuções concorrentes:** use uma flag booleana (`let _executando = false`) para evitar que o fluxo seja disparado duas vezes caso o `visibilitychange` dispare rapidamente.
+
+**Quando limpar o flag:**
+* ✅ Limpar imediatamente após sucesso.
+* ❌ **Não limpar** em caso de erro — o clipboard do sistema ainda contém os dados e o usuário pode colar manualmente via Ctrl+V.
+
+### 5.8. Colagem Automática no Google Sheets via ClipboardEvent + DataTransfer
+
+**Por que Ctrl+V sintético não funciona:** `KeyboardEvent` criado via JavaScript tem `isTrusted: false`. O Google Sheets verifica esse atributo para distinguir eventos reais de sintéticos e bloqueia o paste quando `isTrusted` é falso. Não é possível burlar isso — `isTrusted` é setado pelo browser, não pelo código da página.
+
+**Solução: sintetizar o evento `paste` diretamente com um `DataTransfer`**
+
+O Google Sheets registra seu handler de paste no `document`. Ao criar um `ClipboardEvent` com `clipboardData` populado e despachá-lo em `document`, o Sheets lê `event.clipboardData` diretamente — sem checar `isTrusted` para esse evento.
+
+```javascript
+function sintetizarPaste(htmlData, textData) {
+    const dt = new DataTransfer();
+    dt.setData('text/html',  htmlData);  // Preserva hiperlinks no Sheets
+    dt.setData('text/plain', textData);  // Fallback TSV
+
+    document.dispatchEvent(new ClipboardEvent('paste', {
+        bubbles:       true,
+        cancelable:    true,
+        clipboardData: dt               // Sheets lê daqui, não do clipboard do sistema
+    }));
+}
+```
+
+**MIME types necessários:**
+* `text/html` — essencial para que o Sheets reconheça a tabela HTML e renderize hiperlinks (col B com `<a href="...">`).
+* `text/plain` — fallback TSV caso o HTML não seja processado.
+
+**Ponto de despacho:** sempre despache em `document`, não em `document.activeElement`. O handler de paste do Sheets está registrado no nível do documento.
+
+**Navegação até a célula alvo (Name Box):**
+
+O Name Box é um `<input>` HTML real e pode ser manipulado diretamente via DOM — mais confiável que keyboard events para navegação. Seletores (por ordem de preferência):
+
+```javascript
+function obterNameBox() {
+    return (
+        document.querySelector('.docs-name-box-input') ||
+        document.querySelector('div.docs-name-box input[type="text"]') ||
+        document.querySelector('input[aria-label*="Cell reference"]') ||
+        document.querySelector('input[aria-label*="Referência de célula"]') ||
+        null
+    );
+}
+```
+
+Sequência para navegar até uma célula específica:
+```javascript
+nomeBox.focus();
+nomeBox.select();
+nomeBox.value = 'A151';
+nomeBox.dispatchEvent(new Event('input',  { bubbles: true }));
+nomeBox.dispatchEvent(new Event('change', { bubbles: true }));
+// pausa de 200ms
+nomeBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+```
+
+O Enter deve ser despachado **no próprio `nomeBox`**, não no `document`.
+
+**Compatibilidade:** `new DataTransfer()` requer Chrome 60+ / Firefox 62+. Suportado em todos os browsers compatíveis com TamperMonkey moderno.
+
 ## 6. Diretrizes de Layout e Estilo (UI/UX)
 
 Para manter a consistência visual, os elementos injetados devem parecer nativos do 1Doc ou usar padrões neutros e modernos. Utilize `GM_addStyle` para injetar CSS.
@@ -267,6 +377,45 @@ Para gestão de listas dinâmicas (ex: múltiplos nomes na busca), utilize Chips
 ```
 (CSS: Fundo #e6f2ff, texto e borda #005fcc, border-radius: 16px, display: inline-flex).
 
+
+### Campos de Seleção em Dialogs (Evitar `<select>` nativo)
+
+O elemento `<select>` nativo tem renderização controlada pelo SO/browser e **não deve ser usado em dialogs injetados no 1Doc**. Tentativas de corrigir o texto cortado via CSS (`flex-grow`, `flex: 1 1 0 !important`, `min-width: 0 !important`) falharam consistentemente porque o Bootstrap do 1Doc sobrescreve as regras e o rendering interno do browser não é controlável via CSS da página.
+
+**Padrão correto: seletor de botões com classe `.active`**
+
+```javascript
+// Geração dos botões (substitui <select> + <option>)
+const optionsHtml = OPCOES.map(nome =>
+    `<button class="cred-opt-btn${nome === salvo ? ' active' : ''}" data-nome="${nome}">${nome}</button>`
+).join('');
+
+// HTML: usa <div> em vez de <select>
+// <div class="cred-opts-group">${optionsHtml}</div>
+
+// Event listener: clique alterna a classe .active
+document.querySelectorAll('.cred-opt-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.cred-opt-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        valorSalvo = btn.dataset.nome;
+        localStorage.setItem('chave', valorSalvo);
+    });
+});
+```
+
+```css
+.cred-opts-group { display: flex; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }
+.cred-opt-btn {
+    padding: 5px 14px; border: 1px solid #ccc; border-radius: 4px;
+    background: #f0f0f0; cursor: pointer; font-size: 13px; color: #333;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.cred-opt-btn:hover { background: #e0e0e0; border-color: #bbb; }
+.cred-opt-btn.active { background: #2980b9; color: #fff; border-color: #2471a3; font-weight: bold; }
+```
+
+> A seção anterior "Campos `<select>` dentro de containers flex" está obsoleta. Este é o padrão vigente.
 
 ## 7. Arquitetura e Preferências de Código
 
