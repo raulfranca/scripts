@@ -49,6 +49,7 @@ O 1Doc possui uma estrutura DOM complexa e, por vezes, poluída. Abaixo estão o
 
 * **Número do Protocolo:** `.nd_num` (Geralmente contém texto como "15.932/2026"). Use `.innerText.trim()`.
 * **Nomes/Contatos (Remetentes e Candidatos):** `span.pp` (*Atenção:* Existem múltiplos na página. O nome real geralmente está no atributo `data-content`).
+* **Data e Hora de Envio do Protocolo:** `document.querySelector('.well.well-header .row-fluid.horario > .span12 > span')`. O container `.row-fluid.horario` é único na página e está dentro do card `.well.well-header` que representa o bloco de informações do protocolo. O seletor de filho direto (`>`) evita falsos positivos. Não requer regex — o elemento já contém exclusivamente o texto da data/hora (`DD/MM/AAAA HH:MM`).
 
 ### Timeline, Histórico e Despachos
 O 1Doc renderiza o histórico de ações em blocos específicos. O monitoramento destes blocos é a forma mais segura de saber se a página terminou de carregar.
@@ -169,12 +170,13 @@ script.remove(); // Limpa o DOM imediatamente após a execução
 
 ### 5.4. Cópia Rich Text para Google Sheets
 
-Para que o Sheets reconheça links clicáveis automaticamente, copie usando HTML:
+Para que o Sheets reconheça links clicáveis automaticamente, copie usando HTML. Esta é a etapa final do fluxo do `credenciamento.user.js` — após a cópia, o dialog fecha e o usuário cola manualmente na planilha (Ctrl+V):
 
 ```javascript
-async function copiarParaPlanilhaSheets(coluna1, textoLink, url, coluna3) {
-    const htmlData = `<table><tr><td>${coluna1}</td><td><a href="${url}">${textoLink}</a></td><td>${coluna3}</td></tr></table>`;
-    const textData = `${coluna1}\t${textoLink}\t${coluna3}`; // Fallback (TSV)
+async function copiarParaPlanilhaSheets(coluna1, dataEnvio, textoLink, url, coluna4) {
+    // Colunas: A=credenciadora, B=dataEnvio, C=protocolo (link), D=candidato
+    const htmlData = `<table><tr><td>${coluna1}</td><td>${dataEnvio}</td><td><a href="${url}">${textoLink}</a></td><td>${coluna4}</td></tr></table>`;
+    const textData = `${coluna1}\t${dataEnvio}\t${textoLink}\t${coluna4}`; // Fallback (TSV)
 
     const blobHtml = new Blob([htmlData], { type: 'text/html' });
     const blobText = new Blob([textData], { type: 'text/plain' });
@@ -228,113 +230,6 @@ window.scrollTo({ top: offsetTop, behavior: 'smooth' });
 elementoAlvo.classList.remove('highlight-target');
 setTimeout(() => elementoAlvo.classList.add('highlight-target'), 10);
 ```
-
-### 5.7. Comunicação Cross-Tab via GM_setValue/GM_getValue
-
-Scripts rodando em origens diferentes (`1doc.com.br` e `docs.google.com`) não compartilham `localStorage` — cada origem tem o seu isolado. A solução correta é `GM_setValue`/`GM_getValue`, cujo escopo é global à instância do TamperMonkey (independente de origem).
-
-**Convenção de chaves:** use o mesmo prefixo das chaves `localStorage` do projeto (ex: `1doc_cred_`), para manter rastreabilidade.
-
-**Padrão recomendado: timestamp + expiração**
-
-Sempre inclua um `timestamp: Date.now()` no payload e descarte dados mais antigos que um intervalo seguro (ex: 5 minutos) para evitar colagem acidental em sessões futuras.
-
-```javascript
-// === Script A (1doc.com.br) — escreve ===
-GM_setValue('1doc_cred_pending_paste', JSON.stringify({
-    credenciadora: 'Renata',
-    protocolo: '15.932/2026',
-    url: window.location.href,
-    candidato: 'João da Silva',
-    timestamp: Date.now()
-}));
-
-// === Script B (docs.google.com) — lê ===
-const EXPIRY_MS = 5 * 60 * 1000;
-
-function verificarDadosPendentes() {
-    const raw = GM_getValue('1doc_cred_pending_paste', '');
-    if (!raw) return null;
-
-    let dados;
-    try { dados = JSON.parse(raw); } catch (e) {
-        GM_setValue('1doc_cred_pending_paste', ''); // Limpa dado corrompido
-        return null;
-    }
-
-    if (!dados.timestamp || Date.now() - dados.timestamp > EXPIRY_MS) {
-        GM_setValue('1doc_cred_pending_paste', ''); // Descarta expirado
-        return null;
-    }
-
-    return dados;
-}
-```
-
-**Guard contra execuções concorrentes:** use uma flag booleana (`let _executando = false`) para evitar que o fluxo seja disparado duas vezes caso o `visibilitychange` dispare rapidamente.
-
-**Quando limpar o flag:**
-* ✅ Limpar imediatamente após sucesso.
-* ❌ **Não limpar** em caso de erro — o clipboard do sistema ainda contém os dados e o usuário pode colar manualmente via Ctrl+V.
-
-### 5.8. Colagem Automática no Google Sheets via ClipboardEvent + DataTransfer
-
-**Por que Ctrl+V sintético não funciona:** `KeyboardEvent` criado via JavaScript tem `isTrusted: false`. O Google Sheets verifica esse atributo para distinguir eventos reais de sintéticos e bloqueia o paste quando `isTrusted` é falso. Não é possível burlar isso — `isTrusted` é setado pelo browser, não pelo código da página.
-
-**Solução: sintetizar o evento `paste` diretamente com um `DataTransfer`**
-
-O Google Sheets registra seu handler de paste no `document`. Ao criar um `ClipboardEvent` com `clipboardData` populado e despachá-lo em `document`, o Sheets lê `event.clipboardData` diretamente — sem checar `isTrusted` para esse evento.
-
-```javascript
-function sintetizarPaste(htmlData, textData) {
-    const dt = new DataTransfer();
-    dt.setData('text/html',  htmlData);  // Preserva hiperlinks no Sheets
-    dt.setData('text/plain', textData);  // Fallback TSV
-
-    document.dispatchEvent(new ClipboardEvent('paste', {
-        bubbles:       true,
-        cancelable:    true,
-        clipboardData: dt               // Sheets lê daqui, não do clipboard do sistema
-    }));
-}
-```
-
-**MIME types necessários:**
-* `text/html` — essencial para que o Sheets reconheça a tabela HTML e renderize hiperlinks (col B com `<a href="...">`).
-* `text/plain` — fallback TSV caso o HTML não seja processado.
-
-**Ponto de despacho:** sempre despache em `document`, não em `document.activeElement`. O handler de paste do Sheets está registrado no nível do documento.
-
-**Navegação até a célula alvo (Name Box):**
-
-O Name Box é um `<input>` HTML real e pode ser manipulado diretamente via DOM — mais confiável que keyboard events para navegação. Seletores (por ordem de preferência):
-
-```javascript
-function obterNameBox() {
-    return (
-        document.querySelector('.docs-name-box-input') ||
-        document.querySelector('div.docs-name-box input[type="text"]') ||
-        document.querySelector('input[aria-label*="Cell reference"]') ||
-        document.querySelector('input[aria-label*="Referência de célula"]') ||
-        null
-    );
-}
-```
-
-Sequência para navegar até uma célula específica:
-```javascript
-nomeBox.focus();
-nomeBox.select();
-nomeBox.value = 'A151';
-nomeBox.dispatchEvent(new Event('input',  { bubbles: true }));
-nomeBox.dispatchEvent(new Event('change', { bubbles: true }));
-// pausa de 200ms
-nomeBox.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
-```
-
-O Enter deve ser despachado **no próprio `nomeBox`**, não no `document`.
-
-**Compatibilidade:** `new DataTransfer()` requer Chrome 60+ / Firefox 62+. Suportado em todos os browsers compatíveis com TamperMonkey moderno.
 
 ## 6. Diretrizes de Layout e Estilo (UI/UX)
 

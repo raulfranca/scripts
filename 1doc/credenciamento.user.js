@@ -1,16 +1,14 @@
 // ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      1.4.0
-// @description  Automação para extração de dados e cópia para planilha de credenciamento.
+// @version      1.6.0
+// @description  Automação para extração de dados e cópia para a área de transferência.
 // @author       Você
 // @match        https://*.1doc.com.br/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=1doc.com.br
 // @updateURL    https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento.user.js
 // @downloadURL  https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento.user.js
 // @grant        GM_addStyle
-// @grant        GM_setValue
-// @grant        GM_getValue
 // ==/UserScript==
 
 (function() {
@@ -20,15 +18,13 @@
     // 1. CONFIGURAÇÕES E ESTADOS
     // ==========================================
     const EQUIPE = ['Renata', 'Catarina', 'Alessandra'];
-    const SHEETS_URL     = 'https://docs.google.com/spreadsheets/d/1OcFrOoA4DQqz1r9cOTKG7kDWyV5jX2xcMFJcf870qzY/edit?gid=0#gid=0';
-    const GM_PENDING_KEY = '1doc_cred_pending_paste';
     let ultimaUrl = location.href;
     let jaRodouNestaPagina = false;
 
     // Recupera dados salvos
     let credenciadoraSalva = localStorage.getItem('1doc_cred_nome') || EQUIPE[0];
     let autoAbrir = localStorage.getItem('1doc_cred_auto') === 'true';
-    let dadosExtraidos = null; // { protocolo, url, candidato } — preenchido após extração
+    let dadosExtraidos = null; // { protocolo, url, candidato, dataEnvio } — preenchido após extração
 
     // ==========================================
     // 2. ESTILOS CSS (Dialog e Botão)
@@ -149,6 +145,7 @@
 
                         <div id="cred-resultado" class="cred-result-box">
                             <div class="cred-result-title">✔ Marcador aplicado — pressione Enter ou clique para copiar.</div>
+                            <div class="cred-data-row"><strong>Data/Hora:</strong> <span id="cred-res-data"></span></div>
                             <div class="cred-data-row"><strong>Protocolo:</strong> <span id="cred-res-prot"></span></div>
                             <div class="cred-data-row"><strong>Candidato(a):</strong> <span id="cred-res-nome"></span></div>
                         </div>
@@ -237,6 +234,13 @@
         return "Nome não encontrado. Preencha manualmente.";
     }
 
+    // Extrai a data e hora de envio do protocolo.
+    // Seletor confirmado no DOM real: div.row-fluid.horario (único na página) dentro do card .well.well-header
+    function extrairDataEnvio() {
+        const el = document.querySelector('.well.well-header .row-fluid.horario > .span12 > span');
+        return el ? el.textContent.trim() : '';
+    }
+
     // Extrai dados e aplica marcador — chamado automaticamente ao abrir o dialog.
     // NÃO copia: a cópia fica a cargo de copiarEFechar(), acionada pelo botão.
     async function executarFluxo() {
@@ -252,18 +256,20 @@
             const protocolo = numEl.innerText.trim();
             const url = window.location.href;
             const candidato = extrairNomeCandidato();
+            const dataEnvio = extrairDataEnvio();
 
             // 2. Aplicar marcador (e remover marcadores de outros credenciadores)
             trocarMarcador(credenciadoraSalva);
 
             // 3. Persistir dados para uso posterior no copiarEFechar
-            dadosExtraidos = { protocolo, url, candidato };
+            dadosExtraidos = { protocolo, url, candidato, dataEnvio };
 
             // 4. Atualizar UI e habilitar botão de cópia com foco
+            document.getElementById('cred-res-data').innerText = dataEnvio || '(não encontrada)';
             document.getElementById('cred-res-prot').innerText = protocolo;
             document.getElementById('cred-res-nome').innerText = candidato;
             document.getElementById('cred-resultado').classList.add('show');
-            btnExecutar.innerText = "Copiar para Planilha";
+            btnExecutar.innerText = "Copiar";
             btnExecutar.disabled = false;
             btnExecutar.focus();
 
@@ -279,6 +285,7 @@
 
     // Copia os dados para o clipboard e fecha o dialog.
     // Se chamada antes da extração (retry), delega para executarFluxo.
+    // O usuário deverá colar manualmente na planilha (Ctrl+V).
     async function copiarEFechar() {
         if (!dadosExtraidos) {
             await executarFluxo();
@@ -289,19 +296,7 @@
         btnExecutar.disabled = true;
 
         try {
-            await copiarParaPlanilha(credenciadoraSalva, dadosExtraidos.protocolo, dadosExtraidos.url, dadosExtraidos.candidato);
-
-            // Armazena dados estruturados para o script do Sheets colar automaticamente
-            GM_setValue(GM_PENDING_KEY, JSON.stringify({
-                credenciadora: credenciadoraSalva,
-                protocolo:     dadosExtraidos.protocolo,
-                url:           dadosExtraidos.url,
-                candidato:     dadosExtraidos.candidato,
-                timestamp:     Date.now()
-            }));
-
-            // Abre ou foca a aba da planilha (mesmo nome = reutiliza janela existente)
-            window.open(SHEETS_URL, 'sheetsWindow');
+            await copiarParaPlanilha(credenciadoraSalva, dadosExtraidos.dataEnvio, dadosExtraidos.protocolo, dadosExtraidos.url, dadosExtraidos.candidato);
 
             fecharDialog();
         } catch (error) {
@@ -312,10 +307,11 @@
         }
     }
 
-    // Cria os dados no formato HTML (para gerar hiperlink) e Plain Text (fallback)
-    async function copiarParaPlanilha(credenciadora, protocolo, url, candidato) {
-        const htmlData = `<table><tr><td>${credenciadora}</td><td><a href="${url}">${protocolo}</a></td><td>${candidato}</td></tr></table>`;
-        const textData = `${credenciadora}\t${protocolo}\t${candidato}`;
+    // Cria os dados no formato HTML (para gerar hiperlink) e Plain Text (fallback).
+    // Colunas: A=credenciadora, B=dataEnvio, C=protocolo (link), D=candidato
+    async function copiarParaPlanilha(credenciadora, dataEnvio, protocolo, url, candidato) {
+        const htmlData = `<table><tr><td>${credenciadora}</td><td>${dataEnvio}</td><td><a href="${url}">${protocolo}</a></td><td>${candidato}</td></tr></table>`;
+        const textData = `${credenciadora}\t${dataEnvio}\t${protocolo}\t${candidato}`;
 
         const blobHtml = new Blob([htmlData], { type: 'text/html' });
         const blobText = new Blob([textData], { type: 'text/plain' });
