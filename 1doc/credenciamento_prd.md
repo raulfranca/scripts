@@ -9,7 +9,7 @@
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento.user.js`
-**Versão atual:** `2.0.0`
+**Versão atual:** `3.3.0`
 
 ---
 
@@ -25,21 +25,28 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
 
 1. O usuário abre a página de um protocolo específico no 1Doc (`pg=doc/ver`).
 2. O script injeta um botão "Credenciamento" no cabeçalho, ao lado dos marcadores.
-3. Se a opção "Abrir automaticamente" estiver ativada, o painel surge imediatamente. Caso contrário, o usuário clica no botão para abri-lo.
-4. Ao abrir, o painel executa automaticamente a fase de extração:
-   * Extrai número do protocolo, data/hora de envio e URL — exibidos no bloco de identificação (parte superior fixa).
-   * Pré-preenche o campo editável "Nome do candidato" com o nome extraído da página (quem enviou o protocolo).
+3. Se a opção "Abrir automaticamente" estiver ativada, o script clica automaticamente no botão "Tabela" (`a.link_tabela_revisao_anexos`) da primeira mensagem para abrir o modal nativo `#modal_aprovacao_anexos`. Caso contrário, o usuário clica no botão "Credenciamento" para disparar a mesma ação.
+4. O modal nativo abre (carrega a tabela de revisão de documentos via AJAX). O script aguarda o carregamento e injeta os controles de credenciamento dentro do modal:
+   * **Header customizado** (verde institucional) com título, botões de credenciadora e checkboxes de preferência — substitui o header nativo do modal.
+   * **Bloco de identificação** (fundo verde claro) com Protocolo e Data/Hora extraídos automaticamente.
+   * **Formulário** inserido acima da tabela de documentos: Nome do candidato, CPF, Função pretendida, Regiões Escolares.
+   * **Botões de toggle "OK"** em cada linha de documento da tabela nativa, para conferência visual.
+   * **Botão "Copiar"** adicionado ao footer do modal.
+5. Ao abrir, o script executa automaticamente a fase de extração:
+   * Extrai número do protocolo, data/hora de envio e URL — exibidos no bloco de identificação.
+   * Pré-preenche o campo editável "Nome do candidato" com o nome extraído da página.
    * Injeta `<script>` com jQuery para aplicar o marcador do credenciador selecionado e remover marcadores dos demais membros.
    * Habilita o botão "Copiar" e coloca o foco nele.
-5. O usuário confere os dados e preenche/corrige:
-   * **Nome do candidato** — campo editável pré-preenchido; deve ser corrigido se o protocolo foi enviado por outra pessoa. Um aviso logo abaixo do campo alerta para essa necessidade.
+6. O usuário confere os dados e preenche/corrige:
+   * **Nome do candidato** — campo editável pré-preenchido; deve ser corrigido se o protocolo foi enviado por outra pessoa.
    * **CPF** do candidato (campo com máscara automática `000.000.000-00`).
    * **Função pretendida** (seleção única entre Educação Básica/Física/Artes).
    * **Regiões Escolares** de interesse (múltipla seleção entre as 5 regiões do município).
-6. O usuário pode trocar o credenciador no cabeçalho a qualquer momento; o marcador é atualizado imediatamente.
-7. O usuário clica em "Copiar" (ou pressiona **Enter**):
+   * **Documentos** — pode clicar nos botões "Revisar" nativos e marcar como "OK" com os toggles injetados.
+7. O usuário pode trocar o credenciador no cabeçalho a qualquer momento; o marcador é atualizado imediatamente.
+8. O usuário clica em "Copiar" (ou pressiona **Enter**):
    * Os dados são copiados para a área de transferência (HTML rico + TSV).
-   * O painel fecha automaticamente.
+   * O modal fecha automaticamente.
    * O usuário cola manualmente na planilha do Google Sheets (Ctrl+V).
 
 ---
@@ -49,27 +56,30 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
 ### 3.1. Interface de Usuário (UI)
 
 * **Botão de Ativação:** Injetar um botão na barra de ferramentas do 1Doc (`.btn-group-tags`), estilizado como `.btn-info` (verde tema 1Doc).
-* **Painel de Conferência:** Modal largo (`min(900px, 95vw)`, `max-height: 90vh`) com scroll interno, seguindo o design system nativo do 1Doc (Bootstrap 2, fonte Open Sans, paleta verde institucional). Estrutura em 4 zonas:
+* **Modal Nativo Modificado:** O script utiliza o modal nativo `#modal_aprovacao_anexos` (Bootstrap 2) que já existe na página, acionado pelo botão "Tabela" (`a.link_tabela_revisao_anexos`). O script clica programaticamente nesse botão, aguarda o carregamento AJAX da tabela de documentos e injeta seus controles dentro do modal. Estrutura em 5 zonas:
 
-  **Cabeçalho (fixo):** header verde escuro (`#005400`, mesmo tom do `.modal-header` do 1Doc) com duas linhas:
-  - *Linha 1:* título "📋 Credenciamento" | botões de credenciadora | botão fechar. Os botões de credenciadora usam estilo translúcido no fundo verde; o ativo fica em branco com texto verde escuro.
+  **Cabeçalho customizado (injetado, substitui o header nativo):** header verde escuro (`#005400`) com duas linhas:
+  - *Linha 1:* título "Credenciamento" | botões de credenciadora | botão fechar nativo do modal.
   - *Linha 2 (separada por linha tênue):* dois checkboxes brancos lado a lado:
-    - **Abrir automaticamente nos protocolos** (persiste em `localStorage`; comportamento idêntico ao anterior).
+    - **Abrir automaticamente nos protocolos** (persiste em `localStorage`).
     - **Aplicar marcador automaticamente** (persiste em `localStorage`; quando desmarcado, todas as chamadas a `trocarMarcador` são bypassadas).
 
-  **Bloco de Identificação (fixo, fundo verde claro institucional):** exibe os dados extraídos automaticamente — Protocolo e Data/Hora. Valores renderizados como `—` até a extração ser concluída. Não editável.
+  **Bloco de Identificação (fundo verde claro institucional):** exibe os dados extraídos automaticamente — Protocolo e Data/Hora. Valores renderizados como `—` até a extração ser concluída. Não editável.
 
-  **Corpo do formulário:** campos preenchidos/corrigidos pelo usuário:
-  * **Nome do candidato** — input texto de largura total, pré-preenchido com o nome extraído da página. Editável, pois o protocolo pode ter sido enviado por outra pessoa. Aviso de atenção exibido diretamente abaixo do campo.
+  **Formulário de credenciamento (dentro do `.modal-body`, acima da tabela):** campos preenchidos/corrigidos pelo usuário:
+  * **Nome do candidato** — input texto de largura total, pré-preenchido com o nome extraído da página. Editável. Aviso de atenção exibido diretamente abaixo do campo.
   * **CPF** — input com máscara progressiva `000.000.000-00` (armazena só dígitos).
   * **Função pretendida** — 3 botões, seleção única: Educação Básica (verde institucional), Educação Física (vermelho), Artes (laranja). Botões inativos com `opacity: 0.35`; ativo com `opacity: 1` e leve escala.
   * **Regiões Escolares** — 5 botões, múltipla seleção (toggle): 1-Centro (amarelo), 2-Zona Oeste (verde institucional), 3-Zona Leste (vermelho), 4-Moreira César (verde), 5-Zona Rural (roxo).
-  * Aviso destacado (fundo amarelo).
-  * Checkbox "Abrir automaticamente nos protocolos".
 
-  **Rodapé (fixo):** botão "Copiar" (largura total, verde institucional `#006600`), desabilitado durante a extração.
+  **Tabela de documentos (conteúdo nativo do 1Doc):** carregada via AJAX dentro de `.div_lista_aprovacao_anexos`. Exibe cada documento categorizado com nome, data e botão "Revisar" nativo.
 
-* **Foco:** botão "Copiar" recebe `.focus()` ao fim da extração; retorna ao botão ao sair dos controles de credenciadora.
+  **Outros documentos anexos (injetado):** O script varre a tabela de despachos filhos (`#table_anexos_filhos`) em busca de anexos enviados em despachos posteriores que não são categorizados e portanto não aparecem na tabela nativa. Esses anexos são identificados comparando os `data-id_anexo` dos elementos `td.index` dentro de `#table_anexos_filhos` com os IDs decodificados (base64 `iea`) dos links do modal. A diferença é exibida numa seção "Outros documentos anexos" ao final da tabela, no mesmo formato visual (inner table com colunas Arquivo original, Em, Origem), com links clicáveis. A coluna "Em" mostra o número do despacho de onde o anexo foi extraído (obtido do `<strong data-im>` dentro do `table.despacho` ancestral). Nomes de arquivo longos são truncados via CSS (`text-overflow: ellipsis`, `max-width: 280px`) e o nome completo fica acessível em tooltip (`title`) ao fazer hover. Se não houver despachos posteriores ou anexos extras, a seção não aparece. Ao reabrir o modal (o AJAX do 1Doc recarrega a tabela), a seção é re-injetada automaticamente.
+
+  **Rodapé (footer nativo do modal, modificado):** botão "Copiar" (`btn-success`) adicionado antes do botão "Fechar" existente. Desabilitado durante a extração.
+
+* **Foco:** botão "Copiar" recebe `.focus()` ao fim da extração.
+* **Guard de injeção:** O atributo `data-cred-injetado` no modal evita duplicação. Na navegação SPA, os elementos injetados são removidos e o modal restaurado ao estado original.
 
 
 
@@ -134,6 +144,20 @@ Após a cópia bem-sucedida para o clipboard, o painel fecha automaticamente. O 
   | `1doc_cred_nome` | primeiro da equipe | Nome do credenciador selecionado |
   | `1doc_cred_auto` | `false` | Abrir dialog automaticamente nos protocolos |
   | `1doc_cred_marcador` | `true` | Aplicar/remover marcadores automaticamente |
-* **Resiliência a SPA (Single Page Application):** O 1Doc navega entre protocolos sem recarregar a página (via AJAX). O script deve implementar um `setInterval` ou `MutationObserver` para monitorar a mudança de URL e resetar o estado do Dialog sempre que um novo documento for aberto.
-* **Isolamento de Escopo:** O código deve rodar em uma IIFE para não gerar conflito de variáveis globais com o sistema do 1Doc.
-* **Performance:** A injeção e extração não devem travar a interface principal do usuário (UI Thread). O uso de `setTimeout` é necessário para dar tempo de o DOM do 1Doc ser completamente renderizado antes da extração.
+* **Resiliência a SPA (Single Page Application):** O 1Doc navega entre protocolos sem recarregar a página (via AJAX). O script implementa `setInterval` para monitorar a mudança de URL. Ao detectar mudança, remove todos os elementos injetados do modal (header, info block, formulário, botão copiar), restaura o header original, limpa o atributo `data-cred-injetado` e reseta o estado do candidato.
+* **Isolamento de Escopo:** O código roda em uma IIFE para não gerar conflito de variáveis globais com o sistema do 1Doc.
+* **Performance:** A injeção e extração não travam a interface principal do usuário (UI Thread). O uso de `setTimeout` é necessário para dar tempo de o DOM do 1Doc ser completamente renderizado antes da extração. O AJAX do modal nativo é monitorado via `setInterval(100ms)` com timeout de segurança.
+* **Sem modal custom:** O script não cria elementos de overlay ou modal próprios. Toda a UI é injetada dentro do modal nativo `#modal_aprovacao_anexos`.
+
+---
+
+## 5. Seletores DOM Específicos
+
+| Seletor | Uso |
+|---|---|
+| `a.link_tabela_revisao_anexos` | Botão "Tabela" que abre o modal nativo de revisão. Script clica no primeiro encontrado. |
+| `#modal_aprovacao_anexos` | Modal nativo Bootstrap 2 onde os controles são injetados. |
+| `.div_lista_aprovacao_anexos` | Container dentro do modal-body onde o 1Doc carrega a tabela de documentos via AJAX. |
+| `.modal-header` (dentro do modal) | Header original do modal, oculto pelo script via classe `cred-header-original-hidden`. |
+| `.modal-footer .cancelar` | Botão nativo "Fechar" do modal, usado para fechar programaticamente. |
+| `td.index[data-id_anexo]` | Célula de anexo na página. Contém `data-id_anexo` (ID único) e `data-id_emissao` (ID do despacho). O script compara esses IDs com os do modal para encontrar anexos extras. |

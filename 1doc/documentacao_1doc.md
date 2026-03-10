@@ -65,6 +65,30 @@ O 1Doc renderiza o histórico de ações em blocos específicos. O monitoramento
 * **Botão "Arquivar + Parar de acompanhar":** `.botao_flutuante_4.bf_v_7` ou o fallback seguro `button[title*="Arquivar"][title*="Parar de acompanhar"]`.
 * **Botão de Confirmação em Modais (ex: Sim, arquivar):** `#sim` (ID nativo e global para botões de confirmação positiva nos modais do 1Doc).
 
+### Modal de Revisão de Anexos (Tabela)
+
+Usado pelo script de credenciamento como container principal de UI.
+
+* **Botão "Tabela":** `a.link_tabela_revisao_anexos` — Existe um por mensagem/despacho que tem anexos. Possui `data-hash` com o hash do documento e `href="javascript:void(0);"`. O click handler está em JS externo (`functions_utils.js`), abre o modal e carrega o conteúdo via AJAX.
+* **Modal:** `#modal_aprovacao_anexos` — Bootstrap 2 padrão (`.modal.hide.fade`). Fica visível com classe `.in` e `display:block`.
+* **Container da tabela:** `.div_lista_aprovacao_anexos` — Dentro do `.modal-body`. O conteúdo (tabela com documentos e botões "Revisar") é carregado via AJAX após o click no botão "Tabela".
+* **Header nativo:** `#modal_aprovacao_anexos .modal-header` — Contém título `<h3>` e botão fechar `data-dismiss="modal"`.
+* **Footer nativo:** `#modal_aprovacao_anexos .modal-footer` — Contém botão "Fechar" com classe `.cancelar` e `data-dismiss="modal"`.
+
+### Anexos em Despachos (Avulsos)
+
+Anexos enviados em despachos posteriores ficam fora do modal de revisão. Cada anexo é uma `<tr>` dentro de uma `<table class="table_anexos">` adjacente ao bloco `anexos_area_despacho`.
+
+* **Célula do anexo:** `td.index[data-id_anexo]` — Contém `data-id_anexo` (ID único do arquivo) e `data-id_emissao` (ID do despacho). Dentro dela: `<a class="underline">` com o link de download e `<small>nome_do_arquivo.pdf</small>`, e `<small class="tamanho">(281,94 KB)</small>`.
+* **Tabela principal (primeiro despacho):** `table#table_anexos` (com classe `sombr`). **Atenção:** Contém os mesmos anexos que aparecem no modal — NÃO usar como fonte de "outros anexos".
+* **Tabela de despachos filhos:** `table#table_anexos_filhos` (com classe `sm`, `width="90%"`). **Esta é a fonte correta** para identificar anexos avulsos de despachos posteriores.
+* **Área de despacho:** `.anexos_area_despacho.anexos_area_{ID_EMISSAO}` — Container de cada despacho com seus links "Baixar" e "Tabela".
+* **Relação com o modal:** Os links no modal contêm o parâmetro `iea` (base64 do `id_anexo`). Para comparar: `atob(iea)` retorna o ID em texto. Anexos da página cujo `data-id_anexo` não está no modal são "avulsos" (não categorizados).
+
+> **Nota:** O modal é reutilizado na página (não destruído ao fechar). Scripts que injetam conteúdo devem usar um guard (`data-cred-injetado`) e remover/restaurar os elementos na navegação SPA.
+
+> **Nota (AJAX reload):** Cada clique no botão "Tabela" recarrega o conteúdo de `.div_lista_aprovacao_anexos` via AJAX, **destruindo** quaisquer elementos injetados dentro do `.modal-body` (formulários, linhas de tabela, etc.). Elementos injetados **fora** do `.modal-body` (como headers customizados no topo do modal) sobrevivem ao reload. O guard `data-cred-injetado` deve verificar se os elementos internos ainda existem e re-injetá-los quando necessário.
+
 ### Componentes Nativos do 1Doc (Select2 / Marcadores)
 
 O 1Doc usa a biblioteca Select2 para campos de seleção múltipla, como **Marcadores**. A manipulação visual é diferente da manipulação sistêmica.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      2.0.0
+// @version      3.3.0
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -33,40 +33,10 @@
     let cpfDigitos = '';          // apenas os dígitos do CPF
 
     // ==========================================
-    // 2. ESTILOS CSS
+    // 2. ESTILOS CSS (mínimo — aproveita classes nativas do 1Doc)
     // ==========================================
     GM_addStyle(`
-        /* =============================================
-           CREDENCIAMENTO — UI nativa 1Doc
-           Bootstrap 2 + Open Sans + paleta verde
-           ============================================= */
-
-        /* Overlay (backdrop do modal — padrão Bootstrap 2) */
-        #cred-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5); z-index: 1040;
-            display: none; align-items: center; justify-content: center;
-        }
-        #cred-overlay.active { display: flex; }
-
-        /* ── Modal container (Bootstrap 2 .modal) ── */
-        #cred-dialog {
-            background: #fff;
-            width: min(900px, 95vw);
-            max-height: 90vh;
-            overflow: hidden;
-            border: 1px solid rgba(0,0,0,0.3);
-            border-radius: 6px;
-            box-shadow: 0 3px 7px rgba(0,0,0,0.3);
-            font-family: "Open Sans", Helvetica, Arial, sans-serif;
-            font-size: 14px;
-            color: #333;
-            z-index: 1050;
-            display: flex;
-            flex-direction: column;
-        }
-
-        /* ── Modal Header (verde 1Doc — .modal-header override) ── */
+        /* Header verde injetado no modal nativo */
         .cred-header {
             background-color: #005400;
             color: #fff;
@@ -74,9 +44,7 @@
             display: flex;
             flex-direction: column;
             gap: 0;
-            flex-shrink: 0;
             border-bottom: 1px solid #004400;
-            border-radius: 6px 6px 0 0;
         }
         .cred-header-row1 {
             display: flex; align-items: center; gap: 12px;
@@ -105,12 +73,6 @@
             background: #fff; color: #005400; font-weight: 700;
             border-color: #fff;
         }
-        .cred-close {
-            cursor: pointer; font-size: 20px; color: #fff; opacity: 0.7;
-            border: none; background: transparent; line-height: 1;
-            font-weight: 200; margin-left: 8px; padding: 0;
-        }
-        .cred-close:hover { opacity: 1; }
         /* Checkboxes no header */
         .cred-header-toggle {
             display: flex; align-items: center; gap: 5px;
@@ -119,7 +81,7 @@
         }
         .cred-header-toggle input { cursor: pointer; accent-color: #fff; }
 
-        /* ── Bloco de identificação (well verde claro) ── */
+        /* Bloco de identificação (well verde claro) */
         .cred-info-block {
             background: rgba(0, 102, 0, 0.08);
             border-bottom: 1px solid rgba(0, 102, 0, 0.2);
@@ -127,7 +89,6 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
-            flex-shrink: 0;
         }
         .cred-info-row { display: flex; gap: 30px; flex-wrap: wrap; }
         .cred-info-item { display: flex; flex-direction: column; min-width: 0; }
@@ -136,203 +97,480 @@
             color: #408d40; font-weight: 700; margin-bottom: 1px;
         }
         .cred-info-value { font-size: 14px; font-weight: 700; color: #333; line-height: 1.4; }
-        .cred-nome-value { font-size: 16px; }
 
-        /* ── Corpo do formulário (.modal-body) ── */
-        .cred-body {
-            padding: 15px;
-            flex: 1;
-            overflow-y: auto;
-            max-height: calc(90vh - 200px);
-        }
-
-        .cred-section { margin-bottom: 15px; }
+        /* Formulário dentro do modal */
+        .cred-form-section { padding: 12px 15px; border-bottom: 1px solid #eee; }
+        .cred-form-section:last-child { border-bottom: none; }
         .cred-section-label {
             display: block; font-size: 13px; font-weight: 700;
             color: #333; margin-bottom: 6px;
         }
         .cred-btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
 
-        /* CPF — input padrão Bootstrap 2 */
+        /* CPF input */
         .cred-cpf-input {
             width: 180px; padding: 4px 6px; font-size: 14px;
             border: 1px solid #ccc; border-radius: 4px;
             font-family: "Open Sans", Helvetica, Arial, sans-serif;
             color: #555; line-height: 20px;
-            transition: border-color 0.15s, box-shadow 0.15s;
         }
         .cred-cpf-input:focus {
             border-color: #006600; outline: none;
             box-shadow: 0 0 0 2px rgba(0,102,0,0.2);
         }
 
-        /* Nome do candidato — input editável (largura total) */
+        /* Nome input */
         .cred-nome-input {
             width: 100%; padding: 4px 6px; font-size: 14px; font-weight: 600;
             border: 1px solid #ccc; border-radius: 4px;
             font-family: "Open Sans", Helvetica, Arial, sans-serif;
             color: #333; line-height: 20px; box-sizing: border-box;
-            transition: border-color 0.15s, box-shadow 0.15s;
         }
         .cred-nome-input:focus {
             border-color: #006600; outline: none;
             box-shadow: 0 0 0 2px rgba(0,102,0,0.2);
         }
 
-        /* ── Botões de Função (seleção única) ── */
-        .cred-funcao-btn {
-            padding: 6px 16px; border-radius: 4px; border: 2px solid transparent;
-            cursor: pointer; font-size: 13px; font-weight: 700;
-            font-family: "Open Sans", Helvetica, Arial, sans-serif;
-            opacity: 0.35; transition: opacity 0.15s, transform 0.1s;
+        /* Botões de toggle (função e região) — mesmo estilo do botão "Revisar" nativo */
+        .cred-toggle-btn {
+            background-color: #555 !important;
+            border-color: #444 !important;
+            color: #fff !important;
+            transition: background-color 0.15s, border-color 0.15s;
+            margin-bottom: 3px;
         }
-        .cred-funcao-btn:hover { opacity: 0.65; }
-        .cred-funcao-btn.active { opacity: 1; transform: scale(1.04); }
-        .cred-funcao-basica { background: #006600; color: #fff; border-color: #005400; }
-        .cred-funcao-fisica { background: #c0392b; color: #fff; border-color: #a93226; }
-        .cred-funcao-artes  { background: #e67e22; color: #fff; border-color: #ca6f1e; }
-
-        /* ── Botões de Região (múltipla seleção) ── */
-        .cred-regiao-btn {
-            padding: 6px 14px; border-radius: 4px; border: 2px solid transparent;
-            cursor: pointer; font-size: 12px; font-weight: 700;
-            font-family: "Open Sans", Helvetica, Arial, sans-serif;
-            opacity: 0.35; transition: opacity 0.15s, transform 0.1s;
+        .cred-toggle-btn:hover {
+            background-color: #666 !important;
         }
-        .cred-regiao-btn:hover { opacity: 0.65; }
-        .cred-regiao-btn.active { opacity: 1; transform: scale(1.04); }
-        .cred-regiao-centro  { background: #f1c40f; color: #5d4e00; border-color: #d4ac0d; }
-        .cred-regiao-oeste   { background: #006600; color: #fff;    border-color: #005400; }
-        .cred-regiao-leste   { background: #e74c3c; color: #fff;    border-color: #c0392b; }
-        .cred-regiao-moreira { background: #27ae60; color: #fff;    border-color: #1e8449; }
-        .cred-regiao-rural   { background: #8e44ad; color: #fff;    border-color: #7d3c98; }
-
-        /* Aviso — Bootstrap 2 .alert .alert-block */
-        .cred-warning {
-            background-color: #fcf8e3; color: #c09853;
-            border: 1px solid #fbeed5; border-radius: 4px;
-            padding: 8px 14px; font-size: 13px; margin-top: 4px;
+        .cred-toggle-btn.active {
+            background-color: #005400 !important;
+            border-color: #004400 !important;
+            color: #fff !important;
+        }
+        .cred-toggle-btn.active:hover {
+            background-color: #006600 !important;
         }
 
-        /* ── Footer (.modal-footer) ── */
-        .cred-footer {
+        /* Botão Copiar no footer */
+        #cred-btn-executar {
+            margin-right: 5px;
+        }
+
+        /* Seção da Ficha de Inscrição (destaque acima do formulário) */
+        .cred-ficha-section {
             padding: 10px 15px;
-            border-top: 1px solid #ddd;
-            background: #f5f5f5;
-            flex-shrink: 0;
-            border-radius: 0 0 6px 6px;
+            border-bottom: 1px solid rgba(0, 102, 0, 0.2);
+            background: rgba(0, 102, 0, 0.04);
         }
-        .cred-btn-action {
-            width: 100%; padding: 8px 12px;
-            background-color: #006600; color: #fff;
-            border: none; border-radius: 4px; font-size: 14px; cursor: pointer;
-            font-family: "Open Sans", Helvetica, Arial, sans-serif;
-            font-weight: 600; transition: background-color 0.15s;
-            line-height: 20px;
+        .cred-ficha-section .cred-section-label { margin-bottom: 4px; }
+        .cred-ficha-section table { margin-bottom: 0; }
+        .cred-ficha-section .cred-truncate { max-width: 220px; }
+
+        /* Truncamento de nomes longos de arquivo nos "outros anexos" */
+        .cred-truncate {
+            display: inline-block;
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            vertical-align: bottom;
         }
-        .cred-btn-action:hover { background-color: #004d00; }
-        .cred-btn-action:disabled { background-color: #999; cursor: not-allowed; opacity: 0.65; }
+
+        /* Ocultar o header original quando injetado */
+        #modal_aprovacao_anexos .cred-header-original-hidden { display: none; }
     `);
 
     // ==========================================
-    // 3. CONSTRUÇÃO DA INTERFACE DO DIALOG
+    // 3. INJEÇÃO DE CONTROLES NO MODAL NATIVO
     // ==========================================
-    function criarDialog() {
-        if (document.getElementById('cred-overlay')) return;
 
+    /**
+     * Clica programaticamente no primeiro botão "Tabela" da página.
+     * Retorna true se encontrou e clicou, false caso contrário.
+     */
+    function abrirModalTabela() {
+        const btnTabela = document.querySelector('a.link_tabela_revisao_anexos');
+        if (!btnTabela) return false;
+        btnTabela.click();
+        return true;
+    }
+
+    /**
+     * Aguarda o modal #modal_aprovacao_anexos ficar visível e com conteúdo carregado,
+     * então injeta os controles do credenciamento.
+     */
+    function aguardarModalEInjetar() {
+        let tentativas = 0;
+        const monitor = setInterval(() => {
+            tentativas++;
+            const modal = document.getElementById('modal_aprovacao_anexos');
+            if (!modal) {
+                if (tentativas > 50) clearInterval(monitor); // 5s timeout
+                return;
+            }
+
+            // Modal visível? (Bootstrap 2 adiciona classe .in e display:block)
+            const visivel = modal.classList.contains('in') || modal.style.display === 'block';
+            if (!visivel) {
+                if (tentativas > 50) clearInterval(monitor);
+                return;
+            }
+
+            // Conteúdo carregado? Verifica se a tabela de documentos existe
+            const tabela = modal.querySelector('.div_lista_aprovacao_anexos table');
+            if (!tabela) {
+                if (tentativas > 100) clearInterval(monitor); // 10s timeout para AJAX
+                return;
+            }
+
+            clearInterval(monitor);
+            injetarControlesNoModal(modal);
+        }, 100);
+    }
+
+    /**
+     * Cria o container do formulário de credenciamento (nome, CPF, função, regiões).
+     * Reutilizado na primeira injeção e nas reaberturas do modal.
+     */
+    function criarFormulario() {
+        const formContainer = document.createElement('div');
+        formContainer.id = 'cred-form-container';
+        formContainer.innerHTML = `
+            <div class="cred-form-section">
+                <label class="cred-section-label" for="cred-nome-input">Nome do candidato</label>
+                <input type="text" id="cred-nome-input" class="cred-nome-input"
+                       placeholder="Nome completo do candidato">
+                <div class="alert" style="margin-top: 6px; margin-bottom: 0; padding: 6px 10px; font-size: 12px;">
+                    <strong>Atenção:</strong> O nome extraído é de quem enviou o protocolo. Corrija se o candidato for outra pessoa.
+                </div>
+            </div>
+            <div class="cred-form-section">
+                <label class="cred-section-label" for="cred-cpf">CPF</label>
+                <input type="text" id="cred-cpf" class="cred-cpf-input"
+                       placeholder="000.000.000-00" maxlength="14" inputmode="numeric">
+            </div>
+            <div class="cred-form-section">
+                <label class="cred-section-label">Função pretendida</label>
+                <div class="cred-btn-group">
+                    <button class="btn btn-mini cred-toggle-btn" data-funcao="Ed. Básica"><i class="icon-check-empty"></i> Educação Básica</button>
+                    <button class="btn btn-mini cred-toggle-btn" data-funcao="Ed. Física"><i class="icon-check-empty"></i> Educação Física</button>
+                    <button class="btn btn-mini cred-toggle-btn" data-funcao="Artes"><i class="icon-check-empty"></i> Artes</button>
+                </div>
+            </div>
+            <div class="cred-form-section">
+                <label class="cred-section-label">Regiões Escolares</label>
+                <div class="cred-btn-group">
+                    <button class="btn btn-mini cred-toggle-btn" data-regiao="1"><i class="icon-check-empty"></i> 1 – Centro</button>
+                    <button class="btn btn-mini cred-toggle-btn" data-regiao="2"><i class="icon-check-empty"></i> 2 – Zona Oeste</button>
+                    <button class="btn btn-mini cred-toggle-btn" data-regiao="3"><i class="icon-check-empty"></i> 3 – Zona Leste</button>
+                    <button class="btn btn-mini cred-toggle-btn" data-regiao="4"><i class="icon-check-empty"></i> 4 – Moreira César</button>
+                    <button class="btn btn-mini cred-toggle-btn" data-regiao="5"><i class="icon-check-empty"></i> 5 – Zona Rural</button>
+                </div>
+            </div>
+        `;
+        return formContainer;
+    }
+
+    /**
+     * Registra listeners dos campos do formulário (CPF, função, regiões).
+     * Separado para poder ser chamado na reabertura do modal.
+     */
+    function registrarEventListenersFormulario(modal) {
+        // CPF — máscara progressiva
+        const cpfEl = document.getElementById('cred-cpf');
+        if (cpfEl) {
+            cpfEl.addEventListener('input', (e) => {
+                const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                let fmt = digits;
+                if (digits.length > 9)      fmt = digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6,9)+'-'+digits.slice(9);
+                else if (digits.length > 6) fmt = digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6);
+                else if (digits.length > 3) fmt = digits.slice(0,3)+'.'+digits.slice(3);
+                e.target.value = fmt;
+                cpfDigitos = digits;
+            });
+        }
+
+        // Função (seleção única)
+        modal.querySelectorAll('.cred-toggle-btn[data-funcao]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                modal.querySelectorAll('.cred-toggle-btn[data-funcao]').forEach(b => {
+                    b.classList.remove('active');
+                    b.querySelector('i').className = 'icon-check-empty';
+                });
+                btn.classList.add('active');
+                btn.querySelector('i').className = 'icon-white icon-check';
+                funcaoSelecionada = btn.dataset.funcao;
+            });
+        });
+
+        // Regiões (múltipla seleção — toggle)
+        modal.querySelectorAll('.cred-toggle-btn[data-regiao]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                btn.classList.toggle('active');
+                const ativo = btn.classList.contains('active');
+                btn.querySelector('i').className = ativo ? 'icon-white icon-check' : 'icon-check-empty';
+                const r = parseInt(btn.dataset.regiao);
+                if (ativo) {
+                    if (!regioesSelecionadas.includes(r)) regioesSelecionadas.push(r);
+                } else {
+                    regioesSelecionadas = regioesSelecionadas.filter(x => x !== r);
+                }
+            });
+        });
+    }
+
+    /**
+     * Injeta header, bloco de info, formulário e botão copiar no modal nativo.
+     * Usa atributo data-cred-injetado como guard contra duplicação.
+     */
+    function injetarControlesNoModal(modal) {
+        if (modal.getAttribute('data-cred-injetado') === 'true') {
+            // Já injetado — mas o AJAX do 1Doc pode ter destruído conteúdo do modal-body.
+            // Re-injetar elementos dependentes da tabela AJAX (formulário, ficha, outros anexos).
+            const modalBody = modal.querySelector('.modal-body');
+            if (modalBody) {
+                // Limpar restos antigos que possam ter sobrevivido
+                const fichaAntiga = document.getElementById('cred-ficha-inscricao');
+                if (fichaAntiga) fichaAntiga.remove();
+                const outrosAnexosAntigo = document.getElementById('cred-outros-anexos');
+                if (outrosAnexosAntigo) outrosAnexosAntigo.remove();
+
+                let formContainer = document.getElementById('cred-form-container');
+                if (!formContainer) {
+                    // Formulário foi destruído pelo reload AJAX — recriar
+                    formContainer = criarFormulario();
+                    modalBody.insertBefore(formContainer, modalBody.firstChild);
+                    registrarEventListenersFormulario(modal);
+                }
+
+                moverFichaInscricao(modal, modalBody, formContainer);
+                injetarOutrosAnexos(modal);
+            }
+            resetarEstadoCandidato();
+            if (isPaginaProtocolo()) executarFluxo();
+            return;
+        }
+
+        // Esconder header original
+        const headerOriginal = modal.querySelector('.modal-header');
+        if (headerOriginal) headerOriginal.classList.add('cred-header-original-hidden');
+
+        // --- Construir header customizado ---
         const optionsHtml = EQUIPE.map(nome =>
             `<button class="cred-opt-btn${nome === credenciadoraSalva ? ' active' : ''}" data-nome="${nome}">${nome}</button>`
         ).join('');
 
-        const html = `
-            <div id="cred-overlay">
-                <div id="cred-dialog">
+        const credHeader = document.createElement('div');
+        credHeader.className = 'cred-header';
+        credHeader.innerHTML = `
+            <div class="cred-header-row1">
+                <span class="cred-header-title">Credenciamento</span>
+                <div class="cred-credenciadora-group">${optionsHtml}</div>
+            </div>
+            <div class="cred-header-row2">
+                <label class="cred-header-toggle">
+                    <input type="checkbox" id="cred-auto-abrir" ${autoAbrir ? 'checked' : ''}>
+                    Abrir automaticamente nos protocolos
+                </label>
+                <label class="cred-header-toggle">
+                    <input type="checkbox" id="cred-auto-marcador" ${autoMarcador ? 'checked' : ''}>
+                    Aplicar marcador automaticamente
+                </label>
+            </div>
+        `;
 
-                    <div class="cred-header">
-                        <div class="cred-header-row1">
-                            <span class="cred-header-title">📋 Credenciamento</span>
-                            <div class="cred-credenciadora-group">${optionsHtml}</div>
-                            <button class="cred-close" id="cred-btn-close">✖</button>
-                        </div>
-                        <div class="cred-header-row2">
-                            <label class="cred-header-toggle">
-                                <input type="checkbox" id="cred-auto-abrir" ${autoAbrir ? 'checked' : ''}>
-                                Abrir automaticamente nos protocolos
-                            </label>
-                            <label class="cred-header-toggle">
-                                <input type="checkbox" id="cred-auto-marcador" ${autoMarcador ? 'checked' : ''}>
-                                Aplicar marcador automaticamente
-                            </label>
-                        </div>
-                    </div>
+        // Inserir header customizado no topo do modal (antes do header original oculto)
+        modal.insertBefore(credHeader, modal.firstChild);
 
-                    <div class="cred-info-block">
-                        <div class="cred-info-row">
-                            <div class="cred-info-item">
-                                <span class="cred-info-label">Protocolo</span>
-                                <span id="cred-res-prot" class="cred-info-value">—</span>
-                            </div>
-                            <div class="cred-info-item">
-                                <span class="cred-info-label">Data / Hora</span>
-                                <span id="cred-res-data" class="cred-info-value">—</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="cred-body">
-
-                        <div class="cred-section">
-                            <label class="cred-section-label" for="cred-nome-input">Nome do candidato</label>
-                            <input type="text" id="cred-nome-input" class="cred-nome-input"
-                                   placeholder="Nome completo do candidato">
-                            <div class="cred-warning" style="margin-top: 6px;">
-                                ⚠️ <strong>Atenção:</strong> O nome extraído é de quem enviou o protocolo. Corrija se o candidato for outra pessoa.
-                            </div>
-                        </div>
-                        <div class="cred-section">
-                            <label class="cred-section-label" for="cred-cpf">CPF</label>
-                            <input type="text" id="cred-cpf" class="cred-cpf-input"
-                                   placeholder="000.000.000-00" maxlength="14" inputmode="numeric">
-                        </div>
-
-                        <div class="cred-section">
-                            <label class="cred-section-label">Função pretendida</label>
-                            <div class="cred-btn-group">
-                                <button class="cred-funcao-btn cred-funcao-basica" data-funcao="Ed. Básica">Educação Básica</button>
-                                <button class="cred-funcao-btn cred-funcao-fisica" data-funcao="Ed. Física">Educação Física</button>
-                                <button class="cred-funcao-btn cred-funcao-artes"  data-funcao="Artes">Artes</button>
-                            </div>
-                        </div>
-
-                        <div class="cred-section">
-                            <label class="cred-section-label">Regiões Escolares</label>
-                            <div class="cred-btn-group">
-                                <button class="cred-regiao-btn cred-regiao-centro"  data-regiao="1">1 – Centro</button>
-                                <button class="cred-regiao-btn cred-regiao-oeste"   data-regiao="2">2 – Zona Oeste</button>
-                                <button class="cred-regiao-btn cred-regiao-leste"   data-regiao="3">3 – Zona Leste</button>
-                                <button class="cred-regiao-btn cred-regiao-moreira" data-regiao="4">4 – Moreira César</button>
-                                <button class="cred-regiao-btn cred-regiao-rural"   data-regiao="5">5 – Zona Rural</button>
-                            </div>
-                        </div>
-
-                    </div>
-
-                    <div class="cred-footer">
-                        <button id="cred-btn-executar" class="cred-btn-action" disabled>Processando...</button>
-                    </div>
-
+        // --- Bloco de identificação ---
+        const infoBlock = document.createElement('div');
+        infoBlock.className = 'cred-info-block';
+        infoBlock.innerHTML = `
+            <div class="cred-info-row">
+                <div class="cred-info-item">
+                    <span class="cred-info-label">Protocolo</span>
+                    <span id="cred-res-prot" class="cred-info-value">&mdash;</span>
+                </div>
+                <div class="cred-info-item">
+                    <span class="cred-info-label">Data / Hora</span>
+                    <span id="cred-res-data" class="cred-info-value">&mdash;</span>
                 </div>
             </div>
         `;
-        document.body.insertAdjacentHTML('beforeend', html);
 
-        // Fechar
-        document.getElementById('cred-btn-close').addEventListener('click', fecharDialog);
+        // Inserir após o header customizado
+        credHeader.insertAdjacentElement('afterend', infoBlock);
 
+        // --- Formulário do credenciamento (antes da tabela de documentos) ---
+        const modalBody = modal.querySelector('.modal-body');
+        const formContainer = criarFormulario();
+
+        // Inserir formulário antes do conteúdo da tabela de documentos
+        modalBody.insertBefore(formContainer, modalBody.firstChild);
+
+        // --- Mover Ficha de Inscrição para posição de destaque ---
+        moverFichaInscricao(modal, modalBody, formContainer);
+
+        // --- Injetar "Outros documentos anexos" ---
+        injetarOutrosAnexos(modal);
+
+        // --- Modificar footer: adicionar botão Copiar ---
+        const modalFooter = modal.querySelector('.modal-footer');
+        const btnCopiar = document.createElement('button');
+        btnCopiar.id = 'cred-btn-executar';
+        btnCopiar.className = 'btn btn-success';
+        btnCopiar.disabled = true;
+        btnCopiar.textContent = 'Processando...';
+        modalFooter.insertBefore(btnCopiar, modalFooter.firstChild);
+
+        // Marcar como injetado
+        modal.setAttribute('data-cred-injetado', 'true');
+
+        // --- Registrar event listeners ---
+        registrarEventListeners(modal);
+
+        // --- Executar extração ---
+        resetarEstadoCandidato();
+        if (isPaginaProtocolo()) executarFluxo();
+    }
+
+    /**
+     * Move a linha "I - Ficha de Inscrição" da tabela nativa do modal para uma
+     * posição de destaque, logo acima do formulário do credenciamento.
+     */
+    function moverFichaInscricao(modal, modalBody, formContainer) {
+        const tabelaPrincipal = modal.querySelector('.div_lista_aprovacao_anexos > table > tbody');
+        if (!tabelaPrincipal) return;
+
+        // Localizar a <tr> cuja primeira célula contém "Ficha de Inscrição"
+        let fichaRow = null;
+        for (const tr of tabelaPrincipal.querySelectorAll(':scope > tr')) {
+            const td = tr.querySelector('td');
+            if (td && /ficha de inscri/i.test(td.textContent)) {
+                fichaRow = tr;
+                break;
+            }
+        }
+        if (!fichaRow) return;
+
+        // Extrair o rótulo (ex: "I - Ficha de Inscrição *") e a inner table
+        const labelTd = fichaRow.querySelector('td');
+        const innerTable = fichaRow.querySelector('table');
+        if (!labelTd || !innerTable) return;
+
+        // Aplicar truncamento nos links de arquivo dentro da inner table
+        innerTable.querySelectorAll('td.menor > a[target="_blank"]').forEach(link => {
+            const nome = link.textContent.trim();
+            link.setAttribute('title', nome);
+            link.innerHTML = `<span class="cred-truncate">${nome}</span>`;
+        });
+
+        // Montar container
+        const fichaContainer = document.createElement('div');
+        fichaContainer.id = 'cred-ficha-inscricao';
+        fichaContainer.className = 'cred-ficha-section';
+
+        const label = document.createElement('label');
+        label.className = 'cred-section-label';
+        label.innerHTML = labelTd.childNodes[0].nodeType === Node.TEXT_NODE
+            ? labelTd.innerHTML.trim()
+            : labelTd.innerHTML;
+        fichaContainer.appendChild(label);
+        fichaContainer.appendChild(innerTable);
+
+        // Remover a linha original da tabela
+        fichaRow.remove();
+
+        // Inserir acima do formulário
+        modalBody.insertBefore(fichaContainer, formContainer);
+    }
+
+    /**
+     * Varre a página em busca de anexos que não aparecem na tabela nativa do modal
+     * e injeta-os como "Outros documentos anexos" no final da tabela.
+     */
+    function injetarOutrosAnexos(modal) {
+        // 1. Coletar IDs dos anexos já exibidos no modal (decodificando iea = base64 do id_anexo)
+        const idsNoModal = new Set();
+        modal.querySelectorAll('.div_lista_aprovacao_anexos a[href*="pg=doc/anexo"]').forEach(a => {
+            try {
+                const url = new URL(a.href, window.location.origin);
+                const iea = url.searchParams.get('iea');
+                if (iea) idsNoModal.add(atob(iea));
+            } catch(e) { /* URL inválida ou base64 inválido — ignorar */ }
+        });
+
+        // 2. Coletar anexos de despachos posteriores (apenas em table_anexos_filhos)
+        const anexosExtras = [];
+        const tabelaFilhos = document.getElementById('table_anexos_filhos');
+        if (!tabelaFilhos) return; // Sem despachos posteriores — sem anexos avulsos
+        tabelaFilhos.querySelectorAll('td.index[data-id_anexo]').forEach(td => {
+            const id = td.getAttribute('data-id_anexo');
+            if (idsNoModal.has(id)) return;
+            const link = td.querySelector('a');
+            if (!link) return;
+            const nome = link.textContent.trim();
+            const href = link.getAttribute('href');
+
+            // Extrair número do despacho do container pai
+            const despachoTable = td.closest('table.despacho');
+            let numDespacho = '';
+            if (despachoTable) {
+                const strong = despachoTable.querySelector('th strong[data-im]');
+                if (strong) {
+                    numDespacho = strong.textContent.replace(/\s+/g, ' ').trim()
+                        .replace(/^Despacho\s*/i, '');
+                }
+            }
+
+            anexosExtras.push({ nome, href, numDespacho });
+        });
+
+        if (anexosExtras.length === 0) return;
+
+        // 3. Construir linha da tabela no formato nativo do modal
+        const tabelaPrincipal = modal.querySelector('.div_lista_aprovacao_anexos > table > tbody');
+        if (!tabelaPrincipal) return;
+
+        const linhasHtml = anexosExtras.map(a =>
+            `<tr>
+                <td class="menor"><a href="${a.href}" target="_blank" title="${a.nome}"><span class="cred-truncate">${a.nome}</span></a></td>
+                <td class="menor">${a.numDespacho}</td>
+                <td class="menor">Despacho</td>
+            </tr>`
+        ).join('');
+
+        const novaLinha = document.createElement('tr');
+        novaLinha.id = 'cred-outros-anexos';
+        novaLinha.innerHTML = `
+            <td class="menor">Outros documentos anexos</td>
+            <td>
+                <small>
+                    <table cellspacing="0" width="100%" class="table clearfix table-condensed table-striped sm">
+                        <thead>
+                            <tr>
+                                <th width="50%"><small>Arquivo original</small></th>
+                                <th width="30%"><small>Em</small></th>
+                                <th width="20%"><small>Origem</small></th>
+                            </tr>
+                        </thead>
+                        <tbody>${linhasHtml}</tbody>
+                    </table>
+                </small>
+            </td>
+        `;
+
+        tabelaPrincipal.appendChild(novaLinha);
+    }
+
+    /**
+     * Registra todos os event listeners nos elementos injetados dentro do modal.
+     */
+    function registrarEventListeners(modal) {
         // Credenciadora (seleção única, persistida)
-        document.querySelectorAll('.cred-opt-btn').forEach(btn => {
+        modal.querySelectorAll('.cred-opt-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                document.querySelectorAll('.cred-opt-btn').forEach(b => b.classList.remove('active'));
+                modal.querySelectorAll('.cred-opt-btn').forEach(b => b.classList.remove('active'));
                 btn.classList.add('active');
                 credenciadoraSalva = btn.dataset.nome;
                 localStorage.setItem('1doc_cred_nome', credenciadoraSalva);
@@ -344,38 +582,8 @@
             });
         });
 
-        // CPF — máscara progressiva (armazena só dígitos em cpfDigitos)
-        document.getElementById('cred-cpf').addEventListener('input', (e) => {
-            const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
-            let fmt = digits;
-            if (digits.length > 9)      fmt = digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6,9)+'-'+digits.slice(9);
-            else if (digits.length > 6) fmt = digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6);
-            else if (digits.length > 3) fmt = digits.slice(0,3)+'.'+digits.slice(3);
-            e.target.value = fmt;
-            cpfDigitos = digits;
-        });
-
-        // Função (seleção única)
-        document.querySelectorAll('.cred-funcao-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.cred-funcao-btn').forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                funcaoSelecionada = btn.dataset.funcao;
-            });
-        });
-
-        // Regiões (múltipla seleção — toggle)
-        document.querySelectorAll('.cred-regiao-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                btn.classList.toggle('active');
-                const r = parseInt(btn.dataset.regiao);
-                if (btn.classList.contains('active')) {
-                    if (!regioesSelecionadas.includes(r)) regioesSelecionadas.push(r);
-                } else {
-                    regioesSelecionadas = regioesSelecionadas.filter(x => x !== r);
-                }
-            });
-        });
+        // Listeners do formulário (CPF, função, regiões)
+        registrarEventListenersFormulario(modal);
 
         // Auto-abrir
         document.getElementById('cred-auto-abrir').addEventListener('change', (e) => {
@@ -389,31 +597,63 @@
             localStorage.setItem('1doc_cred_marcador', autoMarcador);
         });
 
-        // Botão principal
+        // Botão Copiar
         document.getElementById('cred-btn-executar').addEventListener('click', copiarEFechar);
     }
 
-    function abrirDialog() {
-        criarDialog();
-
-        // Reset de estado por candidato
+    /**
+     * Reseta o estado por candidato (campos do formulário e variáveis).
+     */
+    function resetarEstadoCandidato() {
         funcaoSelecionada = null;
         regioesSelecionadas = [];
         cpfDigitos = '';
-        document.getElementById('cred-cpf').value = '';
-        document.getElementById('cred-nome-input').value = '';
-        document.querySelectorAll('.cred-funcao-btn').forEach(b => b.classList.remove('active'));
-        document.querySelectorAll('.cred-regiao-btn').forEach(b => b.classList.remove('active'));
-        document.getElementById('cred-res-prot').innerText = '—';
-        document.getElementById('cred-res-data').innerText = '—';
+        dadosExtraidos = null;
 
-        document.getElementById('cred-overlay').classList.add('active');
-        if (isPaginaProtocolo()) executarFluxo();
+        const cpfEl = document.getElementById('cred-cpf');
+        const nomeEl = document.getElementById('cred-nome-input');
+        const protEl = document.getElementById('cred-res-prot');
+        const dataEl = document.getElementById('cred-res-data');
+
+        if (cpfEl) cpfEl.value = '';
+        if (nomeEl) nomeEl.value = '';
+        if (protEl) protEl.innerText = '\u2014';
+        if (dataEl) dataEl.innerText = '\u2014';
+
+        const modal = document.getElementById('modal_aprovacao_anexos');
+        if (modal) {
+            modal.querySelectorAll('.cred-toggle-btn').forEach(b => {
+                b.classList.remove('active');
+                b.querySelector('i').className = 'icon-check-empty';
+            });
+        }
+    }
+
+    /**
+     * Abre o modal (clica no "Tabela"), aguarda e injeta.
+     */
+    function abrirDialog() {
+        const modal = document.getElementById('modal_aprovacao_anexos');
+        const jaAberto = modal && (modal.classList.contains('in') || modal.style.display === 'block');
+
+        if (jaAberto) {
+            // Modal já está aberto — apenas injetar/resetar
+            injetarControlesNoModal(modal);
+            return;
+        }
+
+        if (abrirModalTabela()) {
+            aguardarModalEInjetar();
+        }
     }
 
     function fecharDialog() {
-        const overlay = document.getElementById('cred-overlay');
-        if (overlay) overlay.classList.remove('active');
+        const modal = document.getElementById('modal_aprovacao_anexos');
+        if (modal) {
+            // Usar botão nativo de fechar (Bootstrap 2 data-dismiss)
+            const btnFechar = modal.querySelector('.modal-footer .cancelar');
+            if (btnFechar) btnFechar.click();
+        }
     }
 
     // ==========================================
@@ -439,17 +679,16 @@
         return 'Nome não encontrado. Preencha manualmente.';
     }
 
-    // Seletor confirmado no DOM real: .well.well-header .row-fluid.horario > .span12 > span
     function extrairDataEnvio() {
         const el = document.querySelector('.well.well-header .row-fluid.horario > .span12 > span');
         return el ? el.textContent.trim() : '';
     }
 
-    // Extrai dados e aplica marcador — chamado automaticamente ao abrir o dialog.
     async function executarFluxo() {
         const btnExecutar = document.getElementById('cred-btn-executar');
+        if (!btnExecutar) return;
         btnExecutar.disabled = true;
-        btnExecutar.innerText = 'Processando...';
+        btnExecutar.textContent = 'Processando...';
 
         try {
             const numEl = document.querySelector('.nd_num');
@@ -468,7 +707,7 @@
             document.getElementById('cred-res-data').innerText = dataEnvio || '(não encontrada)';
             document.getElementById('cred-nome-input').value = candidato;
 
-            btnExecutar.innerText = 'Copiar';
+            btnExecutar.textContent = 'Copiar';
             btnExecutar.disabled = false;
             btnExecutar.focus();
 
@@ -476,14 +715,12 @@
             console.error('Erro no script de Credenciamento:', error);
             alert('Erro ao extrair dados. Certifique-se de que a página carregou completamente.');
             dadosExtraidos = null;
-            btnExecutar.innerText = 'Tentar Novamente';
+            btnExecutar.textContent = 'Tentar Novamente';
             btnExecutar.disabled = false;
             btnExecutar.focus();
         }
     }
 
-    // Copia os dados para o clipboard e fecha o dialog.
-    // O usuário deverá colar manualmente na planilha (Ctrl+V).
     async function copiarEFechar() {
         if (!dadosExtraidos) {
             await executarFluxo();
@@ -511,7 +748,6 @@
         }
     }
 
-    // Colunas: A=credenciadora, B=dataEnvio, C=protocolo (link), D=candidato
     async function copiarParaPlanilha(credenciadora, dataEnvio, protocolo, url, candidato) {
         const htmlData = `<table><tr><td>${credenciadora}</td><td>${dataEnvio}</td><td><a href="${url}">${protocolo}</a></td><td>${candidato}</td></tr></table>`;
         const textData = `${credenciadora}\t${dataEnvio}\t${protocolo}\t${candidato}`;
@@ -525,7 +761,6 @@
         })]);
     }
 
-    // Troca o marcador via jQuery nativo da página (ver doc seção 5.3)
     function trocarMarcador(novoNome) {
         const outrosNomes = EQUIPE.filter(n => n !== novoNome).map(n => n.toUpperCase());
         const script = document.createElement('script');
@@ -603,11 +838,32 @@
             funcaoSelecionada = null;
             regioesSelecionadas = [];
             cpfDigitos = '';
-            fecharDialog();
+
+            // Limpar elementos injetados e flag para o próximo protocolo
+            const modal = document.getElementById('modal_aprovacao_anexos');
+            if (modal) {
+                modal.removeAttribute('data-cred-injetado');
+                // Remover elementos injetados para evitar duplicação
+                const credHeader = modal.querySelector('.cred-header');
+                if (credHeader) credHeader.remove();
+                const infoBlock = modal.querySelector('.cred-info-block');
+                if (infoBlock) infoBlock.remove();
+                const formContainer = document.getElementById('cred-form-container');
+                if (formContainer) formContainer.remove();
+                const fichaInscricao = document.getElementById('cred-ficha-inscricao');
+                if (fichaInscricao) fichaInscricao.remove();
+                const outrosAnexos = document.getElementById('cred-outros-anexos');
+                if (outrosAnexos) outrosAnexos.remove();
+                const btnCopiar = document.getElementById('cred-btn-executar');
+                if (btnCopiar) btnCopiar.remove();
+                // Restaurar header original
+                const headerOriginal = modal.querySelector('.modal-header');
+                if (headerOriginal) headerOriginal.classList.remove('cred-header-original-hidden');
+            }
         }
 
         if (isPaginaProtocolo() && autoAbrir && !jaRodouNestaPagina) {
-            if (document.querySelector('.nd_num') && document.querySelector('span.pp')) {
+            if (document.querySelector('.nd_num') && document.querySelector('span.pp') && document.querySelector('a.link_tabela_revisao_anexos')) {
                 jaRodouNestaPagina = true;
                 setTimeout(abrirDialog, 1000);
             }
