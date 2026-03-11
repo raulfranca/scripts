@@ -134,16 +134,34 @@ O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na de
 
 Os dados extraídos devem ser enviados para a área de transferência em dois formatos simultâneos para garantir compatibilidade com o Google Sheets:
 
-* **Rich Text (HTML):** Formato principal, envelopado em tags `<table><tr><td>`.
-* *Coluna A:* Nome do credenciador.
-* *Coluna B:* Data e Hora de envio do protocolo.
-* *Coluna C:* Hiperlink contendo o número do protocolo visível apontando para a URL do 1Doc.
-* *Coluna D:* Nome do candidato.
+* **Rich Text (HTML):** Formato principal, envelopado em tags `<table><tr><td>` com 25 colunas.
+* **Plain Text (TSV):** Formato de fallback separado por tabulações (`\t`), mesma ordem e quantidade de colunas.
 
+A função `copiarParaPlanilha()` lê diretamente das variáveis de estado do módulo (sem parâmetros). Mapeamento completo das 25 colunas (A–Y):
 
-* **Plain Text (TSV):** Formato de fallback separado por tabulações (`\t`), mesma ordem de colunas.
+| Col | Cabeçalho | Valor | Fonte |
+|-----|-----------|-------|-------|
+| A | Data e hora | Texto livre | `dadosExtraidos.dataEnvio` |
+| B | Protocolo 1Doc | Hyperlink no HTML; texto no plain | `dadosExtraidos.protocolo` + `.url` |
+| C | Analisado por | `Renata`, `Catarina` ou `Alessandra` | `credenciadoraSalva` |
+| D | Nome do professor | Texto livre | `#cred-nome-input` (fallback: `dadosExtraidos.candidato`) |
+| E | CPF | 11 dígitos sem formatação | `cpfDigitos` |
+| F | Educação Básica | `Educação Básica` ou vazio | `funcoesSelecionadas` (valor interno `Ed. Básica`) |
+| G | Educação Física | `Educação Física` ou vazio | `funcoesSelecionadas` (valor interno `Ed. Física`) |
+| H | Artes | `Artes` ou vazio | `funcoesSelecionadas` (valor interno `Artes`) |
+| I | Reg. 1 - Centro | `1` ou vazio | `regioesSelecionadas` |
+| J | Reg. 2 - Oeste | `2` ou vazio | `regioesSelecionadas` |
+| K | Reg. 3 - Leste | `3` ou vazio | `regioesSelecionadas` |
+| L | Reg. 4 - Moreira | `4` ou vazio | `regioesSelecionadas` |
+| M | Reg. 5 - Rural | `5` ou vazio | `regioesSelecionadas` |
+| N–X | Documentos I–XI | `sim`, `não` ou vazio | `avaliacoesDocs[cat]` (true→sim, false→não, ausente→vazio) |
+| Y | Resultado | `habilitado` ou `inabilitado` | Calculado: algum `false` → inabilitado; todos `true` → habilitado |
 
-> **Nota:** CPF, Função, Regiões e as avaliações Sim/Não de cada categoria (`avaliacoesDocs`) ainda não são incluídos no clipboard nesta versão. Serão adicionados em versão futura.
+Regras de transformação:
+* **Funções:** Mapeamento explícito de rótulos internos (`Ed. Básica`→`Educação Básica`, `Ed. Física`→`Educação Física`, `Artes`→`Artes`).
+* **Regiões:** Número inteiro (1–5) se selecionado, vazio se não.
+* **Documentos:** Valores minúsculos (`sim`/`não`) conforme validação de dados da planilha.
+* **Resultado:** Minúsculo, sem acento.
 
 ### 3.6. Área de Transferência — Passo Final
 

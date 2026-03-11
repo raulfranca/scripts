@@ -1083,14 +1083,7 @@
         btnExecutar.disabled = true;
 
         try {
-            const candidatoFinal = document.getElementById('cred-nome-input').value.trim() || dadosExtraidos.candidato;
-            await copiarParaPlanilha(
-                credenciadoraSalva,
-                dadosExtraidos.dataEnvio,
-                dadosExtraidos.protocolo,
-                dadosExtraidos.url,
-                candidatoFinal
-            );
+            await copiarParaPlanilha();
             fecharDialog();
         } catch (error) {
             console.error('Erro ao copiar dados:', error);
@@ -1100,9 +1093,53 @@
         }
     }
 
-    async function copiarParaPlanilha(credenciadora, dataEnvio, protocolo, url, candidato) {
-        const htmlData = `<table><tr><td>${credenciadora}</td><td>${dataEnvio}</td><td><a href="${url}">${protocolo}</a></td><td>${candidato}</td></tr></table>`;
-        const textData = `${credenciadora}\t${dataEnvio}\t${protocolo}\t${candidato}`;
+    async function copiarParaPlanilha() {
+        const { dataEnvio, protocolo, url } = dadosExtraidos;
+        const candidato = document.getElementById('cred-nome-input').value.trim() || dadosExtraidos.candidato;
+
+        // Funções: mapeamento interno → planilha
+        const mapFuncoes = { 'Ed. Básica': 'Educação Básica', 'Ed. Física': 'Educação Física', 'Artes': 'Artes' };
+        const colF = funcoesSelecionadas.includes('Ed. Básica') ? mapFuncoes['Ed. Básica'] : '';
+        const colG = funcoesSelecionadas.includes('Ed. Física') ? mapFuncoes['Ed. Física'] : '';
+        const colH = funcoesSelecionadas.includes('Artes')      ? mapFuncoes['Artes']      : '';
+
+        // Regiões: número se selecionado, vazio se não
+        const colRegioes = [1, 2, 3, 4, 5].map(n => regioesSelecionadas.includes(n) ? String(n) : '');
+
+        // Documentos: true→"sim", false→"não", ausente→""
+        const catsDocs = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
+        const colDocs = catsDocs.map(cat => {
+            if (avaliacoesDocs[cat] === true)  return 'sim';
+            if (avaliacoesDocs[cat] === false) return 'não';
+            return '';
+        });
+
+        // Resultado: inabilitado se algum false, habilitado se todos avaliados são true
+        const valores = Object.values(avaliacoesDocs);
+        const resultado = valores.includes(false) ? 'inabilitado' : 'habilitado';
+
+        // Montar array de 25 colunas (A–Y)
+        const cells = [
+            dataEnvio,              // A
+            protocolo,              // B (texto no plain, hyperlink no html)
+            credenciadoraSalva,     // C
+            candidato,              // D
+            cpfDigitos,             // E
+            colF, colG, colH,       // F, G, H
+            ...colRegioes,          // I, J, K, L, M
+            ...colDocs,             // N–X
+            resultado               // Y
+        ];
+
+        // text/plain: tabs separando valores, protocolo sem URL
+        const textData = cells.join('\t');
+
+        // text/html: tabela para o Google Planilhas, protocolo como hyperlink
+        const htmlCells = cells.map((val, i) => {
+            if (i === 1 && url) return `<td><a href="${url}">${val}</a></td>`;
+            return `<td>${val}</td>`;
+        }).join('');
+        const htmlData = `<table><tr>${htmlCells}</tr></table>`;
 
         const blobHtml = new Blob([htmlData], { type: 'text/html' });
         const blobText = new Blob([textData], { type: 'text/plain' });

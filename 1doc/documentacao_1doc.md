@@ -213,21 +213,35 @@ script.remove(); // Limpa o DOM imediatamente após a execução
 
 ### 5.4. Cópia Rich Text para Google Sheets
 
-Para que o Sheets reconheça links clicáveis automaticamente, copie usando HTML. Esta é a etapa final do fluxo do `credenciamento.user.js` — após a cópia, o dialog fecha e o usuário cola manualmente na planilha (Ctrl+V):
+Para que o Sheets reconheça links clicáveis automaticamente, copie usando HTML. Esta é a etapa final do fluxo do `credenciamento.user.js` — após a cópia, o dialog fecha e o usuário cola manualmente na planilha (Ctrl+V).
+
+A função `copiarParaPlanilha()` não recebe parâmetros — lê diretamente das variáveis de estado do módulo. Monta um array de **25 colunas (A–Y)** correspondentes à planilha de controle:
+
+| Col | Conteúdo | Fonte |
+|-----|----------|-------|
+| A | Data e hora | `dadosExtraidos.dataEnvio` |
+| B | Protocolo (hyperlink no HTML, texto no plain) | `dadosExtraidos.protocolo` + `.url` |
+| C | Credenciadora | `credenciadoraSalva` |
+| D | Nome do professor | `#cred-nome-input` |
+| E | CPF (11 dígitos) | `cpfDigitos` |
+| F–H | Funções (Educação Básica/Física, Artes) | `funcoesSelecionadas` com mapeamento de rótulos |
+| I–M | Regiões 1–5 (número ou vazio) | `regioesSelecionadas` |
+| N–X | Documentos I–XI (`sim`/`não`/vazio) | `avaliacoesDocs` |
+| Y | Resultado (`habilitado`/`inabilitado`) | calculado de `avaliacoesDocs` |
+
+Formato do clipboard:
+* **`text/html`:** `<table><tr>` com 25 `<td>`, coluna B como `<a href="...">`.
+* **`text/plain`:** TSV (valores separados por `\t`), protocolo sem URL.
 
 ```javascript
-async function copiarParaPlanilhaSheets(coluna1, dataEnvio, textoLink, url, coluna4) {
-    // Colunas: A=credenciadora, B=dataEnvio, C=protocolo (link), D=candidato
-    const htmlData = `<table><tr><td>${coluna1}</td><td>${dataEnvio}</td><td><a href="${url}">${textoLink}</a></td><td>${coluna4}</td></tr></table>`;
-    const textData = `${coluna1}\t${dataEnvio}\t${textoLink}\t${coluna4}`; // Fallback (TSV)
-
-    const blobHtml = new Blob([htmlData], { type: 'text/html' });
-    const blobText = new Blob([textData], { type: 'text/plain' });
-
-    const data = [new ClipboardItem({ 'text/html': blobHtml, 'text/plain': blobText })];
-    await navigator.clipboard.write(data);
-}
-
+// Exemplo simplificado — ver código completo em credenciamento.user.js
+const cells = [dataEnvio, protocolo, credenciadoraSalva, candidato, cpfDigitos,
+    colF, colG, colH, ...colRegioes, ...colDocs, resultado];
+const textData = cells.join('\t');
+const htmlCells = cells.map((val, i) =>
+    i === 1 && url ? `<td><a href="${url}">${val}</a></td>` : `<td>${val}</td>`
+).join('');
+const htmlData = `<table><tr>${htmlCells}</tr></table>`;
 ```
 ### 5.5 Automação de Modais (Interceptação Rápida)
 Quando o script clica em um botão nativo (como Arquivar), o 1Doc abre um modal com animação. Use este snippet para interceptar e confirmar o modal invisivelmente:
