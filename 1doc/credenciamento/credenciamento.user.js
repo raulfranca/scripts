@@ -36,6 +36,14 @@
     let estadoCivil = '';         // estado civil selecionado
     let celularDigitos = '';      // apenas os dígitos do celular
     let email = '';               // e-mail do candidato
+    let cep = '';                 // CEP (apenas dígitos)
+    let logradouro = '';          // logradouro preenchido pelo ViaCEP
+    let numero = '';              // número do endereço (manual)
+    let bairro = '';              // bairro preenchido pelo ViaCEP
+    let cidade = '';              // cidade preenchida pelo ViaCEP
+    let bancoNome = '';           // nome do banco (campo de texto livre)
+    let bancoCOMPE = '';          // código COMPE (sempre vazio — campo de texto livre)
+    let chavePix = '';            // chave Pix (default: CPF formatado)
     let avaliacoesDocs = {};      // { 'I': true, 'II': false, ... } — true=Sim, false=Não, ausente=não avaliado
 
     // ==========================================
@@ -309,6 +317,8 @@
         #cred-chip-habilitacao.cred-chip-inabilitado {
             background: #f2dede; color: #a94442; border: 1px solid #ebccd1;
         }
+
+
     `);
 
     // ==========================================
@@ -399,6 +409,38 @@
                 </div>
             </div>
             <div class="cred-form-section">
+                <label class="cred-section-label">Endereço</label>
+                <div class="cred-dados-row" style="margin-bottom: 8px;">
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-cep">CEP</label>
+                        <input type="text" id="cred-cep" class="cred-cpf-input"
+                               placeholder="00000-000" maxlength="9" inputmode="numeric" autocomplete="nope" style="width: 100px;">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-logradouro">Logradouro</label>
+                        <input type="text" id="cred-logradouro" class="cred-cpf-input"
+                               placeholder="Rua, Av., ..." autocomplete="nope" style="width: 280px;">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-numero">Número</label>
+                        <input type="text" id="cred-numero" class="cred-cpf-input"
+                               placeholder="Nº" autocomplete="nope" style="width: 70px;">
+                    </div>
+                </div>
+                <div class="cred-dados-row">
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-bairro">Bairro</label>
+                        <input type="text" id="cred-bairro" class="cred-cpf-input"
+                               placeholder="Bairro" autocomplete="nope" style="width: 180px;">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-cidade">Cidade</label>
+                        <input type="text" id="cred-cidade" class="cred-cpf-input"
+                               placeholder="Cidade" autocomplete="nope" style="width: 180px;">
+                    </div>
+                </div>
+            </div>
+            <div class="cred-form-section">
                 <div class="cred-dados-row">
                     <div class="cred-field-block">
                         <label class="cred-section-label" for="cred-email">E-mail</label>
@@ -409,6 +451,20 @@
                         <label class="cred-section-label" for="cred-celular">Celular</label>
                         <input type="text" id="cred-celular" class="cred-cpf-input"
                                placeholder="(00) 00000-0000" maxlength="15" inputmode="numeric" autocomplete="nope">
+                    </div>
+                </div>
+            </div>
+            <div class="cred-form-section">
+                <div class="cred-dados-row">
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-banco-input">Banco</label>
+                        <input type="text" id="cred-banco-input" class="cred-cpf-input"
+                               placeholder="Nome do banco..." autocomplete="nope" style="width: 220px;">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-chavepix">Chave Pix</label>
+                        <input type="text" id="cred-chavepix" class="cred-cpf-input"
+                               placeholder="CPF, e-mail, celular..." autocomplete="nope" style="width: 220px;">
                     </div>
                 </div>
             </div>
@@ -461,6 +517,15 @@
                 else if (digits.length > 3) fmt = digits.slice(0,3)+'.'+digits.slice(3);
                 e.target.value = fmt;
                 cpfDigitos = digits;
+                // Auto-preencher Chave Pix se ainda não foi editada manualmente ou bate com CPF anterior
+                const pixEl = document.getElementById('cred-chavepix');
+                if (pixEl) {
+                    const pixFmt = digits.length === 11
+                        ? digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6,9)+'-'+digits.slice(9)
+                        : '';
+                    pixEl.value = pixFmt;
+                    chavePix = pixFmt;
+                }
             });
         }
 
@@ -547,6 +612,86 @@
                 }
             });
         });
+
+        // CEP — máscara + busca automática ao digitar o 8º dígito
+        const cepEl = document.getElementById('cred-cep');
+        if (cepEl) {
+            const camposEndereco = () => [
+                document.getElementById('cred-logradouro'),
+                document.getElementById('cred-bairro'),
+                document.getElementById('cred-cidade'),
+            ].filter(Boolean);
+
+            const bloquearCampos = () => {
+                camposEndereco().forEach(el => {
+                    el.disabled = true;
+                    el.placeholder = 'Carregando...';
+                    el.value = '';
+                });
+            };
+
+            const liberarCampos = () => {
+                const placeholders = { 'cred-logradouro': 'Rua, Av., ...', 'cred-bairro': 'Bairro', 'cred-cidade': 'Cidade' };
+                camposEndereco().forEach(el => {
+                    el.disabled = false;
+                    el.placeholder = placeholders[el.id] || '';
+                });
+            };
+
+            const buscarCep = async () => {
+                const secaoCep = cepEl.closest('.cred-form-section');
+                if (secaoCep) secaoCep.querySelectorAll('.cred-alert-erro').forEach(el => el.remove());
+                bloquearCampos();
+                try {
+                    const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+                    const data = await res.json();
+                    if (data.erro) throw new Error('CEP não encontrado');
+                    logradouro = data.logradouro || '';
+                    bairro = data.bairro || '';
+                    cidade = data.localidade || '';
+                    liberarCampos();
+                    const logEl = document.getElementById('cred-logradouro');
+                    const baiEl = document.getElementById('cred-bairro');
+                    const cidEl = document.getElementById('cred-cidade');
+                    if (logEl) logEl.value = logradouro;
+                    if (baiEl) baiEl.value = bairro;
+                    if (cidEl) cidEl.value = cidade;
+                } catch (_) {
+                    liberarCampos();
+                    const erro = document.createElement('div');
+                    erro.className = 'cred-alert-erro';
+                    erro.textContent = 'CEP inválido ou não encontrado. Preencha o endereço manualmente.';
+                    if (secaoCep) secaoCep.appendChild(erro);
+                }
+            };
+
+            cepEl.addEventListener('input', (e) => {
+                const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                cep = digits;
+                e.target.value = digits.length > 5 ? digits.slice(0,5) + '-' + digits.slice(5) : digits;
+                if (digits.length === 8) buscarCep();
+            });
+        }
+
+        // Campos de endereço (edição manual após autopreenchimento)
+        const logradouroEl = document.getElementById('cred-logradouro');
+        if (logradouroEl) logradouroEl.addEventListener('input', (e) => { logradouro = e.target.value; });
+        const numeroEl = document.getElementById('cred-numero');
+        if (numeroEl) numeroEl.addEventListener('input', (e) => { numero = e.target.value; });
+        const bairroEl = document.getElementById('cred-bairro');
+        if (bairroEl) bairroEl.addEventListener('input', (e) => { bairro = e.target.value; });
+        const cidadeEl = document.getElementById('cred-cidade');
+        if (cidadeEl) cidadeEl.addEventListener('input', (e) => { cidade = e.target.value; });
+
+        // Chave Pix
+        const pixEl = document.getElementById('cred-chavepix');
+        if (pixEl) pixEl.addEventListener('input', (e) => { chavePix = e.target.value; });
+
+        // Banco — campo de texto simples
+        const bancoInput = document.getElementById('cred-banco-input');
+        if (bancoInput) {
+            bancoInput.addEventListener('input', (e) => { bancoNome = e.target.value; });
+        }
     }
 
     /**
@@ -1004,11 +1149,21 @@
         avaliacoesDocs = {};
         atualizarChipHabilitacao();
 
+        cep = ''; logradouro = ''; numero = ''; bairro = ''; cidade = '';
+        bancoNome = ''; bancoCOMPE = ''; chavePix = '';
+
         const cpfEl = document.getElementById('cred-cpf');
         const rgEl = document.getElementById('cred-rg');
         const nacEl = document.getElementById('cred-nacionalidade');
         const celularEl = document.getElementById('cred-celular');
         const emailEl = document.getElementById('cred-email');
+        const cepEl = document.getElementById('cred-cep');
+        const logradouroEl = document.getElementById('cred-logradouro');
+        const numeroEl = document.getElementById('cred-numero');
+        const bairroEl = document.getElementById('cred-bairro');
+        const cidadeEl = document.getElementById('cred-cidade');
+        const bancoInputEl = document.getElementById('cred-banco-input');
+        const pixElReset  = document.getElementById('cred-chavepix');
         const nomeEl = document.getElementById('cred-nome-input');
         const protEl = document.getElementById('cred-res-prot');
         const dataEl = document.getElementById('cred-res-data');
@@ -1018,6 +1173,13 @@
         if (nacEl) nacEl.value = 'brasileira';
         if (celularEl) celularEl.value = '';
         if (emailEl) emailEl.value = '';
+        if (cepEl) cepEl.value = '';
+        if (logradouroEl) logradouroEl.value = '';
+        if (numeroEl) numeroEl.value = '';
+        if (bairroEl) bairroEl.value = '';
+        if (cidadeEl) cidadeEl.value = '';
+        if (bancoInputEl) bancoInputEl.value = '';
+        if (pixElReset) pixElReset.value = '';
         if (nomeEl) nomeEl.value = '';
         if (protEl) protEl.innerText = '\u2014';
         if (dataEl) dataEl.innerText = '\u2014';
@@ -1297,17 +1459,25 @@
         const valores = Object.values(avaliacoesDocs);
         const resultado = valores.includes(false) ? 'inabilitado' : 'habilitado';
 
-        // Montar array de 25 colunas (A–Y)
+        // Montar array de 32 colunas (A–AF)
         const cells = [
             dataEnvio,              // A
             protocolo,              // B (texto no plain, hyperlink no html)
             credenciadoraSalva,     // C
             candidato,              // D
             cpfDigitos,             // E
-            colF, colG, colH,       // F, G, H
-            ...colRegioes,          // I, J, K, L, M
-            ...colDocs,             // N–X
-            resultado               // Y
+            cep,                    // F
+            logradouro,             // G
+            numero,                 // H
+            bairro,                 // I
+            cidade,                 // J
+            bancoCOMPE,             // K
+            bancoNome,              // L
+            chavePix,               // M
+            colF, colG, colH,       // N, O, P
+            ...colRegioes,          // Q, R, S, T, U
+            ...colDocs,             // V–AF (XI docs = 11 cols)
+            resultado               // AG
         ];
 
         // text/plain: tabs separando valores, protocolo sem URL

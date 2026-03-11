@@ -25,6 +25,14 @@
 | `estadoCivil` | `string` | por candidato | Estado civil selecionado |
 | `celularDigitos` | `string` | por candidato | Apenas dígitos do celular (10–11 chars) |
 | `email` | `string` | por candidato | E-mail do candidato |
+| `cep` | `string` | por candidato | Apenas dígitos do CEP (8 chars) |
+| `logradouro` | `string` | por candidato | Autopreenchido pelo ViaCEP; editável |
+| `numero` | `string` | por candidato | Número do endereço (preenchimento manual) |
+| `bairro` | `string` | por candidato | Autopreenchido pelo ViaCEP; editável |
+| `cidade` | `string` | por candidato | Autopreenchido pelo ViaCEP; editável |
+| `bancoNome` | `string` | por candidato | Nome do banco (campo de texto livre) |
+| `bancoCOMPE` | `string` | por candidato | Sempre vazio — campo de texto livre, sem lookup |
+| `chavePix` | `string` | por candidato | Chave Pix (default: CPF formatado; editável) |
 | `avaliacoesDocs` | `object` | por candidato | `{ 'I': true/false, 'II': true/false, ... }` — `true`=Sim, `false`=Não, ausente=pendente |
 
 ---
@@ -95,6 +103,7 @@
 | `cred-chip-habilitacao` | `injetarControlesNoModal` | Chip de status (Em avaliação / Habilitado / Inabilitado) |
 | `cred-cpf` | `criarFormulario` | Input CPF (máscara `000.000.000-00`) |
 | `cred-rg` | `criarFormulario` | Input RG (máscara `00.000.000-0`) |
+| `cred-banco-input` | `criarFormulario` | Input Banco (campo de texto livre) |
 | `cred-nacionalidade` | `criarFormulario` | Input Nacionalidade (default: `brasileira`) |
 | `cred-celular` | `criarFormulario` | Input Celular (máscara `(00) 00000-0000`) |
 | `cred-email` | `criarFormulario` | Input E-mail |
@@ -157,9 +166,17 @@ observerUI (MutationObserver)
 | C | Credenciadora |
 | D | Nome do candidato |
 | E | CPF (apenas dígitos) |
-| F | `Educação Básica` (se selecionada, senão vazio) |
-| G | `Educação Física` (se selecionada, senão vazio) |
-| H | `Artes` (se selecionada, senão vazio) |
-| I–M | Regiões 1–5 (número da região ou vazio) |
-| N–X | Documentos I–XI (`sim` / `não` / vazio) |
-| Y | Resultado: `habilitado` ou `inabilitado` |
+| F | CEP (apenas dígitos) |
+| G | Logradouro |
+| H | Número |
+| I | Bairro |
+| J | Cidade |
+| K | Código COMPE do banco (sempre vazio — campo de texto livre) |
+| L | Nome do banco |
+| M | Chave Pix |
+| N | `Educação Básica` (se selecionada, senão vazio) |
+| O | `Educação Física` (se selecionada, senão vazio) |
+| P | `Artes` (se selecionada, senão vazio) |
+| Q–U | Regiões 1–5 (número da região ou vazio) |
+| V–AF | Documentos I–XI (`sim` / `não` / vazio) |
+| AG | Resultado: `habilitado` ou `inabilitado` |
