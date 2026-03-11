@@ -199,6 +199,20 @@
             text-align: center;
             white-space: nowrap;
         }
+        /* Alerta de erro de validação */
+        .cred-alert-erro {
+            background-color: #f2dede;
+            border: 1px solid #ebccd1;
+            color: #a94442;
+            border-radius: 4px;
+            padding: 6px 10px;
+            font-size: 12px;
+            margin-top: 6px;
+        }
+        /* Erro injetado diretamente em .div_lista_aprovacao_anexos (fora de .cred-form-section) */
+        .div_lista_aprovacao_anexos > .cred-alert-erro {
+            margin: 8px 15px;
+        }
     `);
 
     // ==========================================
@@ -853,11 +867,89 @@
         }
     }
 
+    /**
+     * Exibe uma mensagem de erro vermelha dentro da seção do campo informado e
+     * rola o modal para que o erro fique visível.
+     */
+    function mostrarErroValidacao(campoId, mensagem) {
+        const campo = document.getElementById(campoId);
+        if (!campo) return;
+        const secao = campo.closest('.cred-form-section') || campo.parentElement;
+        const erro = document.createElement('div');
+        erro.className = 'cred-alert-erro';
+        erro.textContent = mensagem;
+        secao.appendChild(erro);
+        erro.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    /**
+     * Retorna o texto legível do label de uma categoria a partir do elemento .cred-simnao-group.
+     * - Categoria I (movida para .cred-ficha-section): lê label.cred-section-label
+     * - Demais categorias: lê a primeira <td> da linha externa da tabela principal
+     */
+    function getCategoriaLabel(grupo) {
+        const fichaSection = grupo.closest('.cred-ficha-section');
+        if (fichaSection) {
+            const lbl = fichaSection.querySelector('.cred-section-label');
+            return lbl ? lbl.textContent.trim() : grupo.dataset.categoria;
+        }
+        const outerTr = grupo.closest('table')?.closest('td')?.closest('tr');
+        if (outerTr?.cells[0]) {
+            return outerTr.cells[0].textContent.trim().replace(/\s+/g, ' ');
+        }
+        return grupo.dataset.categoria;
+    }
+
+    /**
+     * Exibe o erro de validação dos botões Sim/Não e rola até o primeiro grupo pendente.
+     * Insere o alerta na seção mais próxima fora da estrutura de tabela.
+     */
+    function mostrarErroBotoes(primeiroGrupo, mensagem) {
+        const erro = document.createElement('div');
+        erro.className = 'cred-alert-erro';
+        erro.textContent = mensagem;
+        const fichaSection = primeiroGrupo.closest('.cred-ficha-section');
+        if (fichaSection) {
+            fichaSection.appendChild(erro);
+        } else {
+            const listaDiv = primeiroGrupo.closest('.div_lista_aprovacao_anexos');
+            if (listaDiv) listaDiv.insertBefore(erro, listaDiv.firstChild);
+        }
+        primeiroGrupo.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
+    /**
+     * Valida os campos obrigatórios antes de copiar.
+     * Retorna true se tudo estiver OK; false e exibe o primeiro erro caso contrário.
+     */
+    function validarFormulario() {
+        if (cpfDigitos.length !== 11) {
+            mostrarErroValidacao('cred-cpf', 'Preencha o CPF completo do candidato (11 dígitos) antes de continuar.');
+            return false;
+        }
+        const modal = document.getElementById('modal_aprovacao_anexos');
+        const grupos = modal ? Array.from(modal.querySelectorAll('.cred-simnao-group')) : [];
+        const pendentes = grupos.filter(g => !(g.dataset.categoria in avaliacoesDocs));
+        if (pendentes.length > 0) {
+            const nomes = pendentes.map(getCategoriaLabel);
+            const msg = pendentes.length === 1
+                ? `Clique no botão "Sim" ou "Não" de cada documento para informar se é válido. Pendente: ${nomes[0]}.`
+                : `Clique no botão "Sim" ou "Não" de cada documento para informar se é válido. Pendentes: ${nomes.join('; ')}.`;
+            mostrarErroBotoes(pendentes[0], msg);
+            return false;
+        }
+        return true;
+    }
+
     async function copiarEFechar() {
         if (!dadosExtraidos) {
             await executarFluxo();
             return;
         }
+
+        // Limpar erros anteriores e validar
+        document.querySelectorAll('.cred-alert-erro').forEach(el => el.remove());
+        if (!validarFormulario()) return;
 
         const btnExecutar = document.getElementById('cred-btn-executar');
         btnExecutar.disabled = true;

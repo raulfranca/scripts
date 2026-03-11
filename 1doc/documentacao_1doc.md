@@ -326,6 +326,60 @@ btnSim.addEventListener('click', () => selecionarBotao(btnSim, btnNao, true));
 btnNao.addEventListener('click', () => selecionarBotao(btnNao, btnSim, false));
 ```
 
+#### Validação de Formulário com Erro Visual + Scroll
+
+Ao clicar no botão de ação final (ex: "Copiar"), validar os campos obrigatórios antes de prosseguir. O padrão adotado:
+
+* Limpar todos os `.cred-alert-erro` existentes antes de revalidar.
+* Exibir o erro **dentro da própria seção** do campo problemático (`.cred-form-section`), após os outros elementos.
+* Rolar suavemente até o erro com `scrollIntoView`.
+* A função retorna `false` no primeiro erro encontrado (fail-fast).
+
+```css
+.cred-alert-erro {
+    background-color: #f2dede; border: 1px solid #ebccd1;
+    color: #a94442; border-radius: 4px;
+    padding: 6px 10px; font-size: 12px; margin-top: 6px;
+}
+```
+
+```javascript
+function mostrarErroValidacao(campoId, mensagem) {
+    const campo = document.getElementById(campoId);
+    if (!campo) return;
+    const secao = campo.closest('.cred-form-section') || campo.parentElement;
+    const erro = document.createElement('div');
+    erro.className = 'cred-alert-erro';
+    erro.textContent = mensagem;
+    secao.appendChild(erro);
+    erro.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function validarFormulario() {
+    if (cpfDigitos.length !== 11) {
+        mostrarErroValidacao('cred-cpf', 'Preencha o CPF completo antes de continuar.');
+        return false;
+    }
+    // Botões Sim/Não — todos os grupos precisam ter seleção
+    const grupos = Array.from(modal.querySelectorAll('.cred-simnao-group'));
+    const pendentes = grupos.filter(g => !(g.dataset.categoria in avaliacoesDocs));
+    if (pendentes.length > 0) {
+        const nomes = pendentes.map(getCategoriaLabel);
+        const msg = pendentes.length === 1
+            ? `Informe se o documento está válido ou não: ${nomes[0]}.`
+            : `Informe se cada documento está válido ou não. Pendentes: ${nomes.join('; ')}.`;
+        mostrarErroBotoes(pendentes[0], msg); // scroll até o 1º pendente
+        return false;
+    }
+    // adicionar futuras verificações aqui (fail-fast: retorna false no primeiro erro)
+    return true;
+}
+
+// Em copiarEFechar():
+document.querySelectorAll('.cred-alert-erro').forEach(el => el.remove());
+if (!validarFormulario()) return;
+```
+
 ### Campos de Seleção em Dialogs (Evitar `<select>` nativo)
 
 O elemento `<select>` nativo tem renderização controlada pelo SO/browser e **não deve ser usado em dialogs injetados no 1Doc**. Tentativas de corrigir o texto cortado via CSS (`flex-grow`, `flex: 1 1 0 !important`, `min-width: 0 !important`) falharam consistentemente porque o Bootstrap do 1Doc sobrescreve as regras e o rendering interno do browser não é controlável via CSS da página.
