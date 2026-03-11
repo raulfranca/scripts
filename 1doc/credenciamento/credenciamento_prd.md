@@ -112,9 +112,11 @@ O script deve ler o DOM da página do 1Doc para localizar:
 * **Celular:** Extraído de `.media-body .media-text .ind_tel` (primeira mensagem do protocolo). Armazena apenas dígitos; exibe com máscara no campo. CPF não é extraído desta fonte pois vem parcialmente oculto.
 * **E-mail:** Extraído do texto direto de `.media-body .media-text`, excluindo os filhos `<span>` (`.ind_tel`, `.ind_documento`). Validado com regex básico antes de preencher o campo.
 
-### 3.3. Estado por Candidato (Não Persistido)
+### 3.3. Estado por Candidato (Persistido via localStorage)
 
-Os campos preenchidos manualmente são **descartados a cada novo protocolo** (não persistem em `localStorage`):
+Os campos preenchidos pelo usuário são **salvos automaticamente** no `localStorage` a cada alteração (debounce de 300ms), usando o número do protocolo como chave (`1doc_cred_progresso_{protocolo}`). Ao reabrir o modal para o mesmo protocolo, o script restaura automaticamente os dados salvos, exibindo um toast informativo "Progresso restaurado automaticamente" com botão "Descartar". O progresso é **removido** após cópia bem-sucedida (`copiarEFechar`). Entradas com mais de 30 dias são limpas automaticamente na inicialização do script.
+
+Campos salvos no progresso:
 
 | Variável | Tipo | Comportamento |
 |---|---|---|
@@ -137,7 +139,7 @@ Os campos preenchidos manualmente são **descartados a cada novo protocolo** (n�
 | `avaliacoesDocs` | `object` `{ [romana]: boolean }` | Avaliação Sim/Não por categoria; reset limpa o objeto |
 | `#cred-nome-confirmado` | `checkbox (DOM)` | Desmarcado no reset; o credenciador confirma que o nome confere com a ficha |
 
-O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na detecção de mudança de URL (`setInterval`).
+O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na detecção de mudança de URL (`setInterval`). Após o reset e a extração automática (`executarFluxo`), o script verifica se há progresso salvo para o protocolo atual e, em caso positivo, restaura os campos com `restaurarProgresso()`. Campos vazios no progresso salvo não sobrescrevem valores auto-extraídos (celular, e-mail).
 
 > **Hierarquia de validação ao clicar em "Copiar":**
 > 1. Checkbox "Este nome é igual ao que está na ficha de inscrição" — deve estar marcado.
@@ -199,12 +201,13 @@ Após a cópia bem-sucedida para o clipboard, o painel fecha automaticamente. O 
 
 ## 4. Requisitos Não-Funcionais (Como deve ser feito)
 
-* **Persistência de Estado:** As seguintes preferências são salvas no `localStorage` do navegador e mantidas entre sessões:
+* **Persistência de Estado:** As seguintes preferências e dados são salvos no `localStorage` do navegador e mantidos entre sessões:
   | Chave | Valor padrão | Sobre |
   |---|---|---|
   | `1doc_cred_nome` | primeiro da equipe | Nome do credenciador selecionado |
   | `1doc_cred_auto` | `false` | Abrir dialog automaticamente nos protocolos |
   | `1doc_cred_marcador` | `true` | Aplicar/remover marcadores automaticamente |
+  | `1doc_cred_progresso_{protocolo}` | (não existe) | JSON com estado completo do formulário por candidato. Auto-salvo via debounce (300ms). Removido após cópia bem-sucedida. TTL: 30 dias. |
 * **Resiliência a SPA (Single Page Application):** O 1Doc navega entre protocolos sem recarregar a página (via AJAX). O script implementa `setInterval` para monitorar a mudança de URL. Ao detectar mudança, remove todos os elementos injetados do modal (header, info block, formulário, botão copiar), restaura o header original, limpa o atributo `data-cred-injetado` e reseta o estado do candidato.
 * **Isolamento de Escopo:** O código roda em uma IIFE para não gerar conflito de variáveis globais com o sistema do 1Doc.
 * **Performance:** A injeção e extração não travam a interface principal do usuário (UI Thread). O uso de `setTimeout` é necessário para dar tempo de o DOM do 1Doc ser completamente renderizado antes da extração. O AJAX do modal nativo é monitorado via `setInterval(100ms)` com timeout de segurança.

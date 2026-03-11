@@ -34,6 +34,9 @@
 | `bancoCOMPE` | `string` | por candidato | Sempre vazio — campo de texto livre, sem lookup |
 | `chavePix` | `string` | por candidato | Chave Pix (default: CPF formatado; editável) |
 | `avaliacoesDocs` | `object` | por candidato | `{ 'I': true/false, 'II': true/false, ... }` — `true`=Sim, `false`=Não, ausente=pendente |
+| `_salvarProgressoTimer` | `number\|null` | sessão | Timer ID do debounce de auto-save (300ms) |
+| `PROGRESSO_PREFIX` | `string` | constante | `'1doc_cred_progresso_'` — prefixo das chaves de progresso no localStorage |
+| `PROGRESSO_TTL_DIAS` | `number` | constante | `30` — dias após os quais entradas órfãs são removidas |
 
 ---
 
@@ -56,8 +59,20 @@
 | `injetarBotoesCategorias` | 897 | `(modal: Element) → void` | Itera linhas da tabela principal; para cada com algarismo romano (I–XI) chama `adicionarColunaStatusNaTabela` |
 | `registrarEventListeners` | 915 | `(modal: Element) → void` | Registra handlers: seleção de credenciadora (persiste em `localStorage`, chama `trocarMarcador`), checkboxes de preferência, botão Copiar → `copiarEFechar`; chama `registrarEventListenersFormulario` |
 | `atualizarChipHabilitacao` | 956 | `() → void` | Atualiza `#cred-chip-habilitacao`: verde = todos Sim, vermelho = ≥1 Não, cinza = algum pendente |
-| `resetarEstadoCandidato` | 980 | `() → void` | Zera todas as variáveis por candidato e limpa os campos do formulário no DOM (inputs, checkboxes, botões toggle) |
-| `abrirDialog` | 1027 | `() → void` | Se modal já aberto: re-injeta via `injetarControlesNoModal`; senão: chama `abrirModalTabela` + `aguardarModalEInjetar` |
+| `resetarEstadoCandidato` | 1139 | `() → void` | Zera todas as variáveis por candidato e limpa os campos do formulário no DOM (inputs, checkboxes, botões toggle) |
+
+### Seção 4B — Persistência de Progresso (localStorage)
+
+| Função | Linha | Assinatura | Descrição |
+|---|---|---|---|
+| `salvarProgresso` | 1252 | `() → void` | Serializa todos os campos do candidato + nome/confirmação e grava em `localStorage` com chave `PROGRESSO_PREFIX + protocolo`. Só opera se `dadosExtraidos` existir. |
+| `agendarSalvarProgresso` | 1286 | `() → void` | Debounce (300ms) para `salvarProgresso`. Chamado pelos event listeners de input/click no formulário e botões Sim/Não. |
+| `carregarProgresso` | 1294 | `(protocolo: string) → object\|null` | Busca progresso salvo no localStorage. Retorna objeto parsed ou `null`. |
+| `limparProgresso` | 1304 | `(protocolo: string) → void` | Remove a chave de progresso do localStorage. Chamado após cópia bem-sucedida. |
+| `restaurarProgresso` | 1313 | `(dados: object) → void` | Restaura variáveis JS e DOM (inputs, toggles, botões Sim/Não) a partir de um objeto de progresso salvo. Campos vazios no progresso não sobrescrevem auto-extraídos. Exibe toast "Progresso restaurado" com botão "Descartar". Chama `atualizarChipHabilitacao`. |
+| `limparProgressoAntigo` | 1460 | `() → void` | Varre chaves `1doc_cred_progresso_*` e remove as com `ts` mais antigo que 30 dias. Chamado uma vez na inicialização. |
+
+| `abrirDialog` | 1475 | `() → void` | Se modal já aberto: re-injeta via `injetarControlesNoModal`; senão: chama `abrirModalTabela` + `aguardarModalEInjetar` |
 | `fecharDialog` | 1042 | `() → void` | Clica no botão nativo `.cancelar` do footer do modal (Bootstrap 2 dismiss) |
 
 ### Seção 4 — Lógica de Extração e Cópia
@@ -129,12 +144,12 @@ setInterval (500ms)
           └─ injetarControlesNoModal
                ├─ criarFormulario
                ├─ moverFichaInscricao
-               │    └─ adicionarColunaStatusNaTabela → criarGrupoBotoes → atualizarChipHabilitacao
+               │    └─ adicionarColunaStatusNaTabela → criarGrupoBotoes → atualizarChipHabilitacao + agendarSalvarProgresso
                ├─ injetarOutrosAnexos
                ├─ injetarBotoesCategorias
                │    └─ adicionarColunaStatusNaTabela (loop)
                ├─ registrarEventListeners
-               │    ├─ registrarEventListenersFormulario
+               │    ├─ registrarEventListenersFormulario → agendarSalvarProgresso (delegated)
                │    ├─ trocarMarcador
                │    └─ copiarEFechar
                │         ├─ executarFluxo
@@ -147,9 +162,14 @@ setInterval (500ms)
                │         │    ├─ mostrarErroBotoes
                │         │    └─ getCategoriaLabel
                │         ├─ copiarParaPlanilha
+               │         ├─ limparProgresso      ← remove chave do localStorage
                │         └─ fecharDialog
-               └─ resetarEstadoCandidato
+               ├─ resetarEstadoCandidato
+               │    └─ atualizarChipHabilitacao
+               └─ carregarProgresso + restaurarProgresso   ← restaura estado salvo
                     └─ atualizarChipHabilitacao
+
+limparProgressoAntigo (inicialização)
 
 observerUI (MutationObserver)
 └─ injetarBotao → abrirDialog

@@ -46,6 +46,11 @@
     let chavePix = '';            // chave Pix (default: CPF formatado)
     let avaliacoesDocs = {};      // { 'I': true, 'II': false, ... } — true=Sim, false=Não, ausente=não avaliado
 
+    // Progresso — debounce timer para auto-save
+    let _salvarProgressoTimer = null;
+    const PROGRESSO_PREFIX = '1doc_cred_progresso_';
+    const PROGRESSO_TTL_DIAS = 30;
+
     // ==========================================
     // 2. ESTILOS CSS (mínimo — aproveita classes nativas do 1Doc)
     // ==========================================
@@ -282,6 +287,21 @@
         .div_lista_aprovacao_anexos > .cred-alert-erro {
             margin: 8px 15px;
         }
+
+        /* Toast de progresso restaurado */
+        .cred-toast-restaurado {
+            display: inline-flex; align-items: center; gap: 8px;
+            background: #d9edf7; border: 1px solid #bce8f1; color: #31708f;
+            border-radius: 4px; padding: 4px 10px; font-size: 12px;
+            margin-right: 8px; animation: credToastIn .3s ease;
+        }
+        .cred-toast-restaurado button {
+            background: none; border: 1px solid #31708f;
+            color: #31708f; border-radius: 3px; padding: 1px 7px; font-size: 11px;
+            cursor: pointer; line-height: 1.4;
+        }
+        .cred-toast-restaurado button:hover { background: #31708f; color: #fff; }
+        @keyframes credToastIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 
         /* Responsividade vertical: footer e header sempre visíveis em telas pequenas.
            Flex-coluna com max-height no modal: apenas .modal-body rola internamente.
@@ -692,6 +712,13 @@
         if (bancoInput) {
             bancoInput.addEventListener('input', (e) => { bancoNome = e.target.value; });
         }
+
+        // Auto-save: qualquer input ou click no formulário agenda salvamento
+        const formCont = document.getElementById('cred-form-container');
+        if (formCont) {
+            formCont.addEventListener('input', agendarSalvarProgresso);
+            formCont.addEventListener('click', agendarSalvarProgresso);
+        }
     }
 
     /**
@@ -724,6 +751,11 @@
             }
             resetarEstadoCandidato();
             if (isPaginaProtocolo()) executarFluxo();
+            // Restaurar progresso salvo (se houver) após extração
+            if (dadosExtraidos && dadosExtraidos.protocolo) {
+                const progressoSalvo = carregarProgresso(dadosExtraidos.protocolo);
+                if (progressoSalvo) restaurarProgresso(progressoSalvo);
+            }
             return;
         }
 
@@ -825,6 +857,11 @@
         // --- Executar extração ---
         resetarEstadoCandidato();
         if (isPaginaProtocolo()) executarFluxo();
+        // Restaurar progresso salvo (se houver) após extração
+        if (dadosExtraidos && dadosExtraidos.protocolo) {
+            const progressoSalvo = carregarProgresso(dadosExtraidos.protocolo);
+            if (progressoSalvo) restaurarProgresso(progressoSalvo);
+        }
     }
 
     /**
@@ -989,6 +1026,7 @@
             }
             clicado.blur();
             atualizarChipHabilitacao();
+            agendarSalvarProgresso();
         }
         btnSim.addEventListener('click', () => selecionarBotao(btnSim, btnNao, true));
         btnNao.addEventListener('click', () => selecionarBotao(btnNao, btnSim, false));
@@ -1104,6 +1142,12 @@
 
         // Botão Copiar
         document.getElementById('cred-btn-executar').addEventListener('click', copiarEFechar);
+
+        // Auto-save: nome do candidato e confirmação
+        const nomeInput = document.getElementById('cred-nome-input');
+        if (nomeInput) nomeInput.addEventListener('input', agendarSalvarProgresso);
+        const nomeConf = document.getElementById('cred-nome-confirmado');
+        if (nomeConf) nomeConf.addEventListener('change', agendarSalvarProgresso);
     }
 
     /**
@@ -1195,6 +1239,237 @@
                 if (icon) icon.className = 'icon-check-empty';
             });
         }
+    }
+
+    // ==========================================
+    // 4B. PERSISTÊNCIA DE PROGRESSO (localStorage)
+    // ==========================================
+
+    /**
+     * Salva o estado atual do formulário no localStorage.
+     * Usa o protocolo como chave. Só opera se dadosExtraidos existir.
+     */
+    function salvarProgresso() {
+        if (!dadosExtraidos || !dadosExtraidos.protocolo) return;
+        const nomeEl = document.getElementById('cred-nome-input');
+        const nomeConfEl = document.getElementById('cred-nome-confirmado');
+        const dados = {
+            ts: Date.now(),
+            candidato: nomeEl ? nomeEl.value : '',
+            nomeConfirmado: nomeConfEl ? nomeConfEl.checked : false,
+            cpf: cpfDigitos,
+            rg: rgDigitos,
+            nacionalidade: nacionalidade,
+            estadoCivil: estadoCivil,
+            celular: celularDigitos,
+            email: email,
+            cep: cep,
+            logradouro: logradouro,
+            numero: numero,
+            bairro: bairro,
+            cidade: cidade,
+            bancoNome: bancoNome,
+            bancoCOMPE: bancoCOMPE,
+            chavePix: chavePix,
+            funcoes: funcoesSelecionadas.slice(),
+            regioes: regioesSelecionadas.slice(),
+            avaliacoesDocs: Object.assign({}, avaliacoesDocs),
+        };
+        try {
+            localStorage.setItem(PROGRESSO_PREFIX + dadosExtraidos.protocolo, JSON.stringify(dados));
+        } catch (_) { /* localStorage cheio — ignora silenciosamente */ }
+    }
+
+    /**
+     * Agenda salvamento com debounce (300ms). Chamado pelos event listeners.
+     */
+    function agendarSalvarProgresso() {
+        clearTimeout(_salvarProgressoTimer);
+        _salvarProgressoTimer = setTimeout(salvarProgresso, 300);
+    }
+
+    /**
+     * Busca progresso salvo para um protocolo. Retorna objeto ou null.
+     */
+    function carregarProgresso(protocolo) {
+        try {
+            const raw = localStorage.getItem(PROGRESSO_PREFIX + protocolo);
+            return raw ? JSON.parse(raw) : null;
+        } catch (_) { return null; }
+    }
+
+    /**
+     * Remove o progresso salvo de um protocolo.
+     */
+    function limparProgresso(protocolo) {
+        try { localStorage.removeItem(PROGRESSO_PREFIX + protocolo); } catch (_) {}
+    }
+
+    /**
+     * Restaura o estado do formulário a partir de um objeto de progresso salvo.
+     * Popula variáveis JS e elementos do DOM (inputs, toggles, botões Sim/Não).
+     * Campos vazios no progresso NÃO sobrescrevem valores auto-extraídos.
+     */
+    function restaurarProgresso(dados) {
+        if (!dados) return;
+
+        // --- Variáveis JS (só sobrescreve se valor salvo não for vazio) ---
+        if (dados.cpf)            cpfDigitos = dados.cpf;
+        if (dados.rg)             rgDigitos = dados.rg;
+        if (dados.nacionalidade)  nacionalidade = dados.nacionalidade;
+        if (dados.estadoCivil)    estadoCivil = dados.estadoCivil;
+        if (dados.celular)        celularDigitos = dados.celular;
+        if (dados.email)          email = dados.email;
+        if (dados.cep)            cep = dados.cep;
+        if (dados.logradouro)     logradouro = dados.logradouro;
+        if (dados.numero)         numero = dados.numero;
+        if (dados.bairro)         bairro = dados.bairro;
+        if (dados.cidade)         cidade = dados.cidade;
+        if (dados.bancoNome)      bancoNome = dados.bancoNome;
+        if (dados.bancoCOMPE)     bancoCOMPE = dados.bancoCOMPE;
+        if (dados.chavePix)       chavePix = dados.chavePix;
+        if (dados.funcoes && dados.funcoes.length)  funcoesSelecionadas = dados.funcoes.slice();
+        if (dados.regioes && dados.regioes.length)  regioesSelecionadas = dados.regioes.slice();
+        if (dados.avaliacoesDocs && Object.keys(dados.avaliacoesDocs).length) {
+            avaliacoesDocs = Object.assign({}, dados.avaliacoesDocs);
+        }
+
+        // --- DOM: campos de texto ---
+        const setVal = (id, val) => { const el = document.getElementById(id); if (el && val) el.value = val; };
+
+        // CPF formatado
+        if (cpfDigitos) {
+            const d = cpfDigitos;
+            let fmt = d;
+            if (d.length > 9)      fmt = d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6,9)+'-'+d.slice(9);
+            else if (d.length > 6) fmt = d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6);
+            else if (d.length > 3) fmt = d.slice(0,3)+'.'+d.slice(3);
+            setVal('cred-cpf', fmt);
+        }
+        // RG formatado
+        if (rgDigitos) {
+            const d = rgDigitos;
+            let fmt = d;
+            if (d.length > 8)      fmt = d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'-'+d.slice(8);
+            else if (d.length > 5) fmt = d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5);
+            else if (d.length > 2) fmt = d.slice(0,2)+'.'+d.slice(2);
+            setVal('cred-rg', fmt);
+        }
+        setVal('cred-nacionalidade', nacionalidade);
+        if (celularDigitos) setVal('cred-celular', formatarCelular(celularDigitos));
+        setVal('cred-email', email);
+        if (cep) setVal('cred-cep', cep.length > 5 ? cep.slice(0,5)+'-'+cep.slice(5) : cep);
+        setVal('cred-logradouro', logradouro);
+        setVal('cred-numero', numero);
+        setVal('cred-bairro', bairro);
+        setVal('cred-cidade', cidade);
+        setVal('cred-banco-input', bancoNome);
+        if (chavePix) {
+            // Mostrar formatado se for CPF puro de 11 dígitos
+            const pixDisplay = /^\d{11}$/.test(chavePix)
+                ? chavePix.slice(0,3)+'.'+chavePix.slice(3,6)+'.'+chavePix.slice(6,9)+'-'+chavePix.slice(9)
+                : chavePix;
+            setVal('cred-chavepix', pixDisplay);
+        }
+        if (dados.candidato) setVal('cred-nome-input', dados.candidato);
+        const nomeConfEl = document.getElementById('cred-nome-confirmado');
+        if (nomeConfEl && dados.nomeConfirmado) nomeConfEl.checked = true;
+
+        // --- DOM: botões toggle de estado civil ---
+        const modal = document.getElementById('modal_aprovacao_anexos');
+        if (modal && estadoCivil) {
+            modal.querySelectorAll('.cred-estadocivil-btn').forEach(b => {
+                if (b.dataset.estado === estadoCivil) {
+                    b.classList.add('active');
+                    b.querySelector('i').className = 'icon-white icon-check';
+                } else {
+                    b.classList.remove('active');
+                    b.querySelector('i').className = 'icon-check-empty';
+                }
+            });
+        }
+
+        // --- DOM: botões toggle função ---
+        if (modal && funcoesSelecionadas.length) {
+            modal.querySelectorAll('.cred-toggle-btn[data-funcao]').forEach(btn => {
+                if (funcoesSelecionadas.includes(btn.dataset.funcao)) {
+                    btn.classList.add('active');
+                    btn.querySelector('i').className = 'icon-white icon-check';
+                } else {
+                    btn.classList.remove('active');
+                    btn.querySelector('i').className = 'icon-check-empty';
+                }
+            });
+        }
+
+        // --- DOM: botões toggle regiões ---
+        if (modal && regioesSelecionadas.length) {
+            modal.querySelectorAll('.cred-toggle-btn[data-regiao]').forEach(btn => {
+                const r = parseInt(btn.dataset.regiao);
+                if (regioesSelecionadas.includes(r)) {
+                    btn.classList.add('active');
+                    btn.querySelector('i').className = 'icon-white icon-check';
+                } else {
+                    btn.classList.remove('active');
+                    btn.querySelector('i').className = 'icon-check-empty';
+                }
+            });
+        }
+
+        // --- DOM: botões Sim/Não por categoria ---
+        if (modal && Object.keys(avaliacoesDocs).length) {
+            modal.querySelectorAll('.cred-simnao-group').forEach(grupo => {
+                const cat = grupo.dataset.categoria;
+                if (!(cat in avaliacoesDocs)) return;
+                const [btnSim, btnNao] = grupo.querySelectorAll('.cred-simnao-btn');
+                if (avaliacoesDocs[cat] === true) {
+                    btnSim.classList.remove('inativo');
+                    btnNao.classList.add('inativo');
+                } else if (avaliacoesDocs[cat] === false) {
+                    btnNao.classList.remove('inativo');
+                    btnSim.classList.add('inativo');
+                }
+            });
+        }
+
+        atualizarChipHabilitacao();
+
+        // --- Toast de feedback ---
+        const modalFooter = document.querySelector('#modal_aprovacao_anexos .modal-footer');
+        const btnCopiar = document.getElementById('cred-btn-executar');
+        if (modalFooter && btnCopiar && !modalFooter.querySelector('.cred-toast-restaurado')) {
+            const toast = document.createElement('div');
+            toast.className = 'cred-toast-restaurado';
+            toast.innerHTML = '<span>Progresso restaurado.</span>';
+            const btnDescartar = document.createElement('button');
+            btnDescartar.textContent = 'Descartar';
+            btnDescartar.addEventListener('click', () => {
+                if (dadosExtraidos) limparProgresso(dadosExtraidos.protocolo);
+                toast.remove();
+                resetarEstadoCandidato();
+                if (isPaginaProtocolo()) executarFluxo();
+            });
+            toast.appendChild(btnDescartar);
+            modalFooter.insertBefore(toast, btnCopiar);
+            setTimeout(() => { if (toast.parentNode) toast.remove(); }, 8000);
+        }
+    }
+
+    /**
+     * Remove entradas de progresso mais antigas que PROGRESSO_TTL_DIAS.
+     */
+    function limparProgressoAntigo() {
+        const limite = Date.now() - (PROGRESSO_TTL_DIAS * 24 * 60 * 60 * 1000);
+        const keysToRemove = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (!key.startsWith(PROGRESSO_PREFIX)) continue;
+            try {
+                const dados = JSON.parse(localStorage.getItem(key));
+                if (dados && dados.ts && dados.ts < limite) keysToRemove.push(key);
+            } catch (_) { keysToRemove.push(key); }
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
     }
 
     /**
@@ -1425,6 +1700,7 @@
 
         try {
             await copiarParaPlanilha();
+            if (dadosExtraidos && dadosExtraidos.protocolo) limparProgresso(dadosExtraidos.protocolo);
             fecharDialog();
         } catch (error) {
             console.error('Erro ao copiar dados:', error);
@@ -1569,6 +1845,10 @@
     // ==========================================
     // 6. OBSERVAÇÃO E INICIALIZAÇÃO
     // ==========================================
+
+    // Limpeza de progresso salvo com mais de 30 dias
+    limparProgressoAntigo();
+
     const observerUI = new MutationObserver(() => { injetarBotao(); });
     observerUI.observe(document.body, { childList: true, subtree: true });
 
