@@ -31,6 +31,11 @@
     let funcoesSelecionadas = []; // string[]
     let regioesSelecionadas = []; // number[]
     let cpfDigitos = '';          // apenas os dígitos do CPF
+    let rgDigitos = '';           // apenas os dígitos do RG
+    let nacionalidade = 'brasileira'; // pré-preenchido, editável
+    let estadoCivil = '';         // estado civil selecionado
+    let celularDigitos = '';      // apenas os dígitos do celular
+    let email = '';               // e-mail do candidato
     let avaliacoesDocs = {};      // { 'I': true, 'II': false, ... } — true=Sim, false=Não, ausente=não avaliado
 
     // ==========================================
@@ -120,6 +125,30 @@
             box-shadow: 0 0 0 2px rgba(0,102,0,0.2);
         }
 
+        /* Header de grupo de seção (ex: Dados Pessoais) */
+        .cred-section-group-header {
+            padding: 6px 15px 4px;
+            font-size: 11px; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            color: #005400; background: rgba(0,84,0,0.07);
+            border-top: 1px solid rgba(0,84,0,0.14);
+            border-bottom: 1px solid rgba(0,84,0,0.14);
+        }
+
+        /* Linha horizontal de campos (CPF, RG, Nacionalidade) */
+        .cred-dados-row { display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-start; }
+        .cred-field-block { display: flex; flex-direction: column; }
+
+        /* Botões de estado civil (seleção única) */
+        .cred-estadocivil-btn {
+            border: 1px solid #707070 !important; border-radius: 4px;
+            background: #8b8b8b !important; background-image: none !important;
+            cursor: pointer; color: #fff !important;
+            transition: background 0.15s, border-color 0.15s;
+        }
+        .cred-estadocivil-btn:hover { background: #7a7a7a !important; border-color: #606060 !important; }
+        .cred-estadocivil-btn.active { background: #005400 !important; color: #fff !important; border-color: #004400 !important; }
+
         /* Nome input */
         .cred-nome-input {
             width: 100%; padding: 4px 6px; font-size: 14px; font-weight: 600;
@@ -134,15 +163,20 @@
 
         /* Botões de toggle (função e região) — mesmo estilo do botão "Revisar" nativo */
         .cred-toggle-btn {
-            background-color: #555 !important;
-            border-color: #444 !important;
+            background-color: #8b8b8b !important;
+            background-image: none !important;
+            border-color: #707070 !important;
             color: #fff !important;
             transition: background-color 0.15s, border-color 0.15s;
             margin-bottom: 3px;
         }
         .cred-toggle-btn:hover {
-            background-color: #666 !important;
+            background-color: #7a7a7a !important;
         }
+
+        /* Ícone de checkbox: oculto por padrão, visível apenas quando o botão está ativo */
+        .cred-toggle-btn i, .cred-estadocivil-btn i { display: none; }
+        .cred-toggle-btn.active i, .cred-estadocivil-btn.active i { display: inline; margin-right: 2px; }
         .cred-toggle-btn.active {
             background-color: #005400 !important;
             border-color: #004400 !important;
@@ -333,10 +367,50 @@
         const formContainer = document.createElement('div');
         formContainer.id = 'cred-form-container';
         formContainer.innerHTML = `
+            <div class="cred-section-group-header">Dados Pessoais</div>
             <div class="cred-form-section">
-                <label class="cred-section-label" for="cred-cpf">CPF</label>
-                <input type="text" id="cred-cpf" class="cred-cpf-input"
-                       placeholder="000.000.000-00" maxlength="14" inputmode="numeric">
+                <div class="cred-dados-row">
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-cpf">CPF</label>
+                        <input type="text" id="cred-cpf" class="cred-cpf-input"
+                               placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="nope">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-rg">RG</label>
+                        <input type="text" id="cred-rg" class="cred-cpf-input"
+                               placeholder="00.000.000-0" maxlength="12" inputmode="numeric" autocomplete="nope">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-nacionalidade">Nacionalidade</label>
+                        <input type="text" id="cred-nacionalidade" class="cred-cpf-input"
+                               value="brasileira" autocomplete="nope">
+                    </div>
+                </div>
+            </div>
+            <div class="cred-form-section">
+                <label class="cred-section-label">Estado civil</label>
+                <div class="cred-btn-group" id="cred-estadocivil-group">
+                    <button class="btn btn-mini cred-estadocivil-btn" data-estado="Solteiro(a)"><i class="icon-check-empty"></i> Solteiro(a)</button>
+                    <button class="btn btn-mini cred-estadocivil-btn" data-estado="Casado(a)"><i class="icon-check-empty"></i> Casado(a)</button>
+                    <button class="btn btn-mini cred-estadocivil-btn" data-estado="Divorciado(a)"><i class="icon-check-empty"></i> Divorciado(a)</button>
+                    <button class="btn btn-mini cred-estadocivil-btn" data-estado="Vi\u00favo(a)"><i class="icon-check-empty"></i> Vi\u00favo(a)</button>
+                    <button class="btn btn-mini cred-estadocivil-btn" data-estado="Separado(a)"><i class="icon-check-empty"></i> Separado(a)</button>
+                    <button class="btn btn-mini cred-estadocivil-btn" data-estado="Uni\u00e3o est\u00e1vel"><i class="icon-check-empty"></i> Uni\u00e3o est\u00e1vel</button>
+                </div>
+            </div>
+            <div class="cred-form-section">
+                <div class="cred-dados-row">
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-email">E-mail</label>
+                        <input type="text" id="cred-email" class="cred-cpf-input"
+                               placeholder="email@exemplo.com" inputmode="email" autocomplete="nope" style="width: 260px;">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-celular">Celular</label>
+                        <input type="text" id="cred-celular" class="cred-cpf-input"
+                               placeholder="(00) 00000-0000" maxlength="15" inputmode="numeric" autocomplete="nope">
+                    </div>
+                </div>
             </div>
             <div class="cred-form-section">
                 <label class="cred-section-label">Função pretendida</label>
@@ -361,6 +435,17 @@
     }
 
     /**
+     * Formata dígitos de celular no padrão (00) 00000-0000 (11 dígitos)
+     * ou (00) 0000-0000 (10 dígitos). Progressivo durante a digitação.
+     */
+    function formatarCelular(digits) {
+        if (digits.length <= 2)  return '(' + digits;
+        if (digits.length <= 6)  return '(' + digits.slice(0,2) + ') ' + digits.slice(2);
+        if (digits.length <= 10) return '(' + digits.slice(0,2) + ') ' + digits.slice(2,6) + '-' + digits.slice(6);
+        return '(' + digits.slice(0,2) + ') ' + digits.slice(2,7) + '-' + digits.slice(7);
+    }
+
+    /**
      * Registra listeners dos campos do formulário (CPF, função, regiões).
      * Separado para poder ser chamado na reabertura do modal.
      */
@@ -377,6 +462,60 @@
                 e.target.value = fmt;
                 cpfDigitos = digits;
             });
+        }
+
+        // RG — máscara progressiva (00.000.000-0 com 9 dígitos; sem traço se apenas 8)
+        const rgEl = document.getElementById('cred-rg');
+        if (rgEl) {
+            rgEl.addEventListener('input', (e) => {
+                const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
+                let fmt = digits;
+                if (digits.length > 8)      fmt = digits.slice(0,2)+'.'+digits.slice(2,5)+'.'+digits.slice(5,8)+'-'+digits.slice(8);
+                else if (digits.length > 5) fmt = digits.slice(0,2)+'.'+digits.slice(2,5)+'.'+digits.slice(5);
+                else if (digits.length > 2) fmt = digits.slice(0,2)+'.'+digits.slice(2);
+                e.target.value = fmt;
+                rgDigitos = digits;
+            });
+        }
+
+        // Nacionalidade
+        const nacEl = document.getElementById('cred-nacionalidade');
+        if (nacEl) {
+            nacEl.addEventListener('input', (e) => { nacionalidade = e.target.value; });
+        }
+
+        // Estado civil — seleção única com toggle
+        modal.querySelectorAll('.cred-estadocivil-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const jaAtivo = btn.classList.contains('active');
+                modal.querySelectorAll('.cred-estadocivil-btn').forEach(b => {
+                    b.classList.remove('active');
+                    b.querySelector('i').className = 'icon-check-empty';
+                });
+                if (!jaAtivo) {
+                    btn.classList.add('active');
+                    btn.querySelector('i').className = 'icon-white icon-check';
+                    estadoCivil = btn.dataset.estado;
+                } else {
+                    estadoCivil = '';
+                }
+            });
+        });
+
+        // Celular — máscara progressiva (00) 00000-0000
+        const celularEl = document.getElementById('cred-celular');
+        if (celularEl) {
+            celularEl.addEventListener('input', (e) => {
+                const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                e.target.value = formatarCelular(digits);
+                celularDigitos = digits;
+            });
+        }
+
+        // E-mail
+        const emailEl = document.getElementById('cred-email');
+        if (emailEl) {
+            emailEl.addEventListener('input', (e) => { email = e.target.value.trim(); });
         }
 
         // Função (múltipla seleção — toggle)
@@ -490,7 +629,7 @@
                 <div class="cred-info-item" style="flex: 1;">
                     <span class="cred-info-label">Nome do(a) candidato(a)</span>
                     <input type="text" id="cred-nome-input" class="cred-nome-input"
-                           placeholder="Nome completo do(a) candidato(a)">
+                           placeholder="Nome completo do(a) candidato(a)" autocomplete="nope">
                 </div>
                 <div class="cred-info-item" style="align-self: flex-end;">
                     <span id="cred-chip-habilitacao" class="cred-chip-avaliacao">Em avaliação</span>
@@ -856,16 +995,29 @@
         funcoesSelecionadas = [];
         regioesSelecionadas = [];
         cpfDigitos = '';
+        rgDigitos = '';
+        nacionalidade = 'brasileira';
+        estadoCivil = '';
+        celularDigitos = '';
+        email = '';
         dadosExtraidos = null;
         avaliacoesDocs = {};
         atualizarChipHabilitacao();
 
         const cpfEl = document.getElementById('cred-cpf');
+        const rgEl = document.getElementById('cred-rg');
+        const nacEl = document.getElementById('cred-nacionalidade');
+        const celularEl = document.getElementById('cred-celular');
+        const emailEl = document.getElementById('cred-email');
         const nomeEl = document.getElementById('cred-nome-input');
         const protEl = document.getElementById('cred-res-prot');
         const dataEl = document.getElementById('cred-res-data');
 
         if (cpfEl) cpfEl.value = '';
+        if (rgEl) rgEl.value = '';
+        if (nacEl) nacEl.value = 'brasileira';
+        if (celularEl) celularEl.value = '';
+        if (emailEl) emailEl.value = '';
         if (nomeEl) nomeEl.value = '';
         if (protEl) protEl.innerText = '\u2014';
         if (dataEl) dataEl.innerText = '\u2014';
@@ -875,9 +1027,10 @@
 
         const modal = document.getElementById('modal_aprovacao_anexos');
         if (modal) {
-            modal.querySelectorAll('.cred-toggle-btn').forEach(b => {
+            modal.querySelectorAll('.cred-toggle-btn, .cred-estadocivil-btn').forEach(b => {
                 b.classList.remove('active');
-                b.querySelector('i').className = 'icon-check-empty';
+                const icon = b.querySelector('i');
+                if (icon) icon.className = 'icon-check-empty';
             });
         }
     }
@@ -955,6 +1108,28 @@
             if (autoMarcador) trocarMarcador(credenciadoraSalva);
 
             dadosExtraidos = { protocolo, url, candidato, dataEnvio };
+
+            // Tentar extrair celular e e-mail da primeira mensagem do protocolo
+            const mediaText = document.querySelector('.media-body .media-text');
+            if (mediaText) {
+                const telEl = mediaText.querySelector('.ind_tel');
+                if (telEl) {
+                    const digits = telEl.textContent.replace(/\D/g, '').slice(0, 11);
+                    if (digits.length >= 10) {
+                        celularDigitos = digits;
+                        const celEl = document.getElementById('cred-celular');
+                        if (celEl) celEl.value = formatarCelular(digits);
+                    }
+                }
+                const cloneMedia = mediaText.cloneNode(true);
+                cloneMedia.querySelectorAll('span').forEach(s => s.remove());
+                const emailMatch = cloneMedia.textContent.trim().match(/\S+@\S+\.\S+/);
+                if (emailMatch) {
+                    email = emailMatch[0];
+                    const emailEl = document.getElementById('cred-email');
+                    if (emailEl) emailEl.value = email;
+                }
+            }
 
             document.getElementById('cred-res-prot').innerText = protocolo;
             document.getElementById('cred-res-data').innerText = dataEnvio || '(não encontrada)';
@@ -1053,6 +1228,10 @@
         }
         if (regioesSelecionadas.length === 0) {
             mostrarErroValidacao('cred-regiao-group', 'Selecione ao menos uma Região Escolar antes de continuar.');
+            return false;
+        }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            mostrarErroValidacao('cred-email', 'Preencha um e-mail válido ou deixe o campo em branco.');
             return false;
         }
         const modal = document.getElementById('modal_aprovacao_anexos');

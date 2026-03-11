@@ -10,7 +10,8 @@ scripts/
     ├── sme_ass_prd.md
     └── credenciamento/
         ├── credenciamento.user.js
-        └── credenciamento_prd.md
+        ├── credenciamento_prd.md
+        └── credenciamento_index.md   # Índice de funções/variáveis — consultar antes de editar o script
 ```
 
 O versionamento/backup é feito pelo Git (branch `dev` → merge para `main` para publicar).
@@ -30,3 +31,9 @@ O versionamento/backup é feito pelo Git (branch `dev` → merge para `main` par
    * Um requisito funcional for adicionado, removido ou alterado.
    * Os metadados do cabeçalho do script (versão, match, grant, etc.) forem modificados.
    * O usuário confirmar um novo comportamento que diverge do que está documentado.
+
+5. **Índice de funções (credenciamento)** — para edições em `credenciamento.user.js`, **não carregue o script inteiro**. Siga este fluxo:
+   1. Leia `credenciamento/credenciamento_index.md` para localizar a(s) função(ões) e variáveis relevantes.
+   2. Use `#nomeDaFunção` no chat do Copilot para carregar apenas o contexto necessário (ex.: `#injetarControlesNoModal`, `#copiarParaPlanilha`).
+   3. Se for necessário entender o fluxo completo, aí então leia o script inteiro.
+   4. Ao alterar nomes de funções, adicionar novas ou mudar a responsabilidade de alguma, atualize `credenciamento_index.md`.
