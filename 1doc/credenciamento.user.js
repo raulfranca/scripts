@@ -256,6 +256,25 @@
             overflow-y: auto;
             min-height: 0;
         }
+
+        /* Chip de habilitação */
+        #cred-chip-habilitacao {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        #cred-chip-habilitacao.cred-chip-avaliacao {
+            background: #e8e8e8; color: #666; border: 1px solid #ccc;
+        }
+        #cred-chip-habilitacao.cred-chip-habilitado {
+            background: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6;
+        }
+        #cred-chip-habilitacao.cred-chip-inabilitado {
+            background: #f2dede; color: #a94442; border: 1px solid #ebccd1;
+        }
     `);
 
     // ==========================================
@@ -473,6 +492,9 @@
                     <input type="text" id="cred-nome-input" class="cred-nome-input"
                            placeholder="Nome completo do(a) candidato(a)">
                 </div>
+                <div class="cred-info-item" style="align-self: flex-end;">
+                    <span id="cred-chip-habilitacao" class="cred-chip-avaliacao">Em avaliação</span>
+                </div>
             </div>
             <div class="cred-info-nome-row">
                 <label class="cred-nome-confirma-label">
@@ -682,6 +704,7 @@
                 outro.classList.add('inativo');
             }
             clicado.blur();
+            atualizarChipHabilitacao();
         }
         btnSim.addEventListener('click', () => selecionarBotao(btnSim, btnNao, true));
         btnNao.addEventListener('click', () => selecionarBotao(btnNao, btnSim, false));
@@ -800,6 +823,33 @@
     }
 
     /**
+     * Atualiza o chip de habilitação no footer com base em avaliacoesDocs.
+     * Verde  = todos os grupos marcados SIM.
+     * Vermelho = ao menos um grupo marcado NÃO.
+     * Cinza  = algum grupo ainda sem avaliação.
+     */
+    function atualizarChipHabilitacao() {
+        const chip = document.getElementById('cred-chip-habilitacao');
+        if (!chip) return;
+        const modal = document.getElementById('modal_aprovacao_anexos');
+        if (!modal) return;
+        const categorias = Array.from(modal.querySelectorAll('.cred-simnao-group'))
+            .map(g => g.dataset.categoria);
+        const algumNao      = categorias.some(cat => avaliacoesDocs[cat] === false);
+        const algumPendente = categorias.some(cat => !(cat in avaliacoesDocs));
+        if (algumNao) {
+            chip.className   = 'cred-chip-inabilitado';
+            chip.textContent = 'Inabilitado(a)';
+        } else if (algumPendente) {
+            chip.className   = 'cred-chip-avaliacao';
+            chip.textContent = 'Em avaliação';
+        } else {
+            chip.className   = 'cred-chip-habilitado';
+            chip.textContent = 'Habilitado(a)';
+        }
+    }
+
+    /**
      * Reseta o estado por candidato (campos do formulário e variáveis).
      */
     function resetarEstadoCandidato() {
@@ -808,6 +858,7 @@
         cpfDigitos = '';
         dadosExtraidos = null;
         avaliacoesDocs = {};
+        atualizarChipHabilitacao();
 
         const cpfEl = document.getElementById('cred-cpf');
         const nomeEl = document.getElementById('cred-nome-input');

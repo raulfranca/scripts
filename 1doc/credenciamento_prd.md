@@ -77,7 +77,12 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
 
   **Outros documentos anexos (injetado):** O script varre a tabela de despachos filhos (`#table_anexos_filhos`) em busca de anexos enviados em despachos posteriores que não são categorizados e portanto não aparecem na tabela nativa. Esses anexos são identificados comparando os `data-id_anexo` dos elementos `td.index` dentro de `#table_anexos_filhos` com os IDs decodificados (base64 `iea`) dos links do modal. A diferença é exibida numa seção "Outros documentos anexos" ao final da tabela, no mesmo formato visual (inner table com colunas Arquivo original, Em, Origem), com links clicáveis. A coluna "Em" mostra o número do despacho de onde o anexo foi extraído (obtido do `<strong data-im>` dentro do `table.despacho` ancestral). Nomes de arquivo longos são truncados via CSS (`text-overflow: ellipsis`, `max-width: 280px`) e o nome completo fica acessível em tooltip (`title`) ao fazer hover. Se não houver despachos posteriores ou anexos extras, a seção não aparece. Ao reabrir o modal (o AJAX do 1Doc recarrega a tabela), a seção é re-injetada automaticamente.
 
-  **Rodapé (footer nativo do modal, modificado):** botão "Copiar" (`btn-success`) adicionado antes do botão "Fechar" existente. Desabilitado durante a extração.
+  **Rodapé (footer nativo do modal, modificado):** layout flex. Da esquerda para a direita:
+  - **Chip de habilitação** (`#cred-chip-habilitacao`, `margin-right: auto`): atualizado em tempo real ao clicar nos botões Sim/Não e ao resetar o estado. Estados:
+    - Cinza ("Em avaliação"): ao menos um dos 11 grupos sem avaliação.
+    - Verde ("Habilitado(a)"): todos os 11 grupos marcados SIM.
+    - Vermelho ("Inabilitado(a)"): ao menos um grupo marcado NÃO.
+  - **Botão "Copiar"** (`btn-success`) adicionado antes do botão "Fechar" existente. Desabilitado durante a extração.
 
 * **Foco:** botão "Copiar" recebe `.focus()` ao fim da extração.
 * **Guard de injeção:** O atributo `data-cred-injetado` no modal evita duplicação. Na navegação SPA, os elementos injetados são removidos e o modal restaurado ao estado original.
