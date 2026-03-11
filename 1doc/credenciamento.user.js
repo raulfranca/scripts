@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      3.3.0
+// @version      0.1.0
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -31,6 +31,7 @@
     let funcaoSelecionada = null; // string | null
     let regioesSelecionadas = []; // number[]
     let cpfDigitos = '';          // apenas os dígitos do CPF
+    let avaliacoesDocs = {};      // { 'I': true, 'II': false, ... } — true=Sim, false=Não, ausente=não avaliado
 
     // ==========================================
     // 2. ESTILOS CSS (mínimo — aproveita classes nativas do 1Doc)
@@ -178,6 +179,22 @@
 
         /* Ocultar o header original quando injetado */
         #modal_aprovacao_anexos .cred-header-original-hidden { display: none; }
+
+        /* Botões Sim/Não por categoria de documento */
+        .cred-simnao-group {
+            display: inline-flex;
+            gap: 4px;
+        }
+        .cred-simnao-group .cred-simnao-btn {
+            opacity: 1;
+            transition: opacity 0.15s;
+        }
+        /* Célula mesclada (rowspan) que contém os botões Sim/Não */
+        .cred-simnao-cell {
+            vertical-align: middle !important;
+            text-align: center;
+            white-space: nowrap;
+        }
     `);
 
     // ==========================================
@@ -345,6 +362,7 @@
 
                 moverFichaInscricao(modal, modalBody, formContainer);
                 injetarOutrosAnexos(modal);
+                injetarBotoesCategorias(modal);
             }
             resetarEstadoCandidato();
             if (isPaginaProtocolo()) executarFluxo();
@@ -414,6 +432,9 @@
         // --- Injetar "Outros documentos anexos" ---
         injetarOutrosAnexos(modal);
 
+        // --- Injetar botões Sim/Não por categoria ---
+        injetarBotoesCategorias(modal);
+
         // --- Modificar footer: adicionar botão Copiar ---
         const modalFooter = modal.querySelector('.modal-footer');
         const btnCopiar = document.createElement('button');
@@ -476,6 +497,7 @@
             ? labelTd.innerHTML.trim()
             : labelTd.innerHTML;
         fichaContainer.appendChild(label);
+        adicionarColunaStatusNaTabela(innerTable, 'I');
         fichaContainer.appendChild(innerTable);
 
         // Remover a linha original da tabela
@@ -564,6 +586,106 @@
     }
 
     /**
+     * Cria um par de botões Sim/Não para uma categoria de documento.
+     * O estado é registrado em avaliacoesDocs[categoria].
+     * Opacidade: ambos 100% no estado inicial; ao clicar num, o outro vai a 50%.
+     */
+    function criarGrupoBotoes(categoria) {
+        const grupo = document.createElement('div');
+        grupo.className = 'cred-simnao-group';
+        grupo.dataset.categoria = categoria;
+        grupo.innerHTML = `
+            <button class="btn btn-success btn-mini cred-simnao-btn">Sim</button>
+            <button class="btn btn-danger btn-mini cred-simnao-btn">Não</button>
+        `;
+        const [btnSim, btnNao] = grupo.querySelectorAll('.cred-simnao-btn');
+        btnSim.addEventListener('click', () => {
+            avaliacoesDocs[categoria] = true;
+            btnSim.style.opacity = '1';
+            btnNao.style.opacity = '0.5';
+        });
+        btnNao.addEventListener('click', () => {
+            avaliacoesDocs[categoria] = false;
+            btnSim.style.opacity = '0.5';
+            btnNao.style.opacity = '1';
+        });
+        return grupo;
+    }
+
+    /**
+     * Reutiliza a coluna nativa "Status da revisão" da inner table de uma categoria.
+     * - Localiza o índice da coluna pelo texto do cabeçalho.
+     * - Na primeira linha do corpo: transforma a <td> existente em célula mesclada (rowspan)
+     *   com os botões Sim/Não e remove o botão "Revisar" original.
+     * - Nas demais linhas: remove a <td> da mesma coluna (cobertas pelo rowspan).
+     */
+    function adicionarColunaStatusNaTabela(innerTable, categoria) {
+        if (!innerTable) return;
+        if (innerTable.querySelector('.cred-simnao-cell')) return; // Já injetado
+
+        // Ocultar botões "Revisar" individuais
+        innerTable.querySelectorAll('a.anexo_galeria_item_hover_btn').forEach(a => { a.style.display = 'none'; });
+
+        // Localizar o índice da coluna "Status da revisão" no cabeçalho
+        const headerRow = innerTable.querySelector('thead > tr') || innerTable.querySelector('tr');
+        let colIndex = -1;
+        if (headerRow) {
+            Array.from(headerRow.querySelectorAll('th, td')).forEach((th, i) => {
+                if (/status da revis/i.test(th.textContent)) colIndex = i;
+            });
+        }
+
+        // Coletar linhas do corpo (excluindo cabeçalho)
+        const tbody = innerTable.querySelector('tbody');
+        const bodyRows = tbody
+            ? Array.from(tbody.querySelectorAll(':scope > tr'))
+            : Array.from(innerTable.querySelectorAll('tr')).slice(1);
+        if (bodyRows.length === 0) return;
+
+        if (colIndex !== -1) {
+            // Reutilizar a <td> existente da coluna nativa na primeira linha
+            const primeiraCell = bodyRows[0].querySelectorAll('td')[colIndex];
+            if (primeiraCell) {
+                primeiraCell.innerHTML = '';
+                primeiraCell.className = 'cred-simnao-cell';
+                primeiraCell.rowSpan = bodyRows.length;
+                primeiraCell.appendChild(criarGrupoBotoes(categoria));
+            }
+            // Remover a <td> da mesma coluna nas demais linhas (cobertas pelo rowspan)
+            bodyRows.slice(1).forEach(tr => {
+                const cell = tr.querySelectorAll('td')[colIndex];
+                if (cell) cell.remove();
+            });
+        } else {
+            // Fallback: coluna nativa não encontrada — adicionar célula no final da primeira linha
+            const td = document.createElement('td');
+            td.className = 'cred-simnao-cell';
+            td.rowSpan = bodyRows.length;
+            td.appendChild(criarGrupoBotoes(categoria));
+            bodyRows[0].appendChild(td);
+        }
+    }
+
+    /**
+     * Percorre as linhas de categoria da tabela nativa e, para cada uma com algarismo romano,
+     * injeta a coluna "Status da revisão" com botões Sim/Não mesclados via rowspan.
+     */
+    function injetarBotoesCategorias(modal) {
+        const ROMANA_RE = /^(XI|X|IX|VIII|VII|VI|IV|V|III|II|I)\s*[-–]/;
+        const tabelaPrincipal = modal.querySelector('.div_lista_aprovacao_anexos > table > tbody');
+        if (!tabelaPrincipal) return;
+
+        for (const tr of tabelaPrincipal.querySelectorAll(':scope > tr')) {
+            const td = tr.querySelector('td');
+            if (!td) continue;
+            const match = td.textContent.trim().match(ROMANA_RE);
+            if (!match) continue; // Sem algarismo romano → pular
+
+            adicionarColunaStatusNaTabela(tr.querySelector('table'), match[1]);
+        }
+    }
+
+    /**
      * Registra todos os event listeners nos elementos injetados dentro do modal.
      */
     function registrarEventListeners(modal) {
@@ -609,6 +731,7 @@
         regioesSelecionadas = [];
         cpfDigitos = '';
         dadosExtraidos = null;
+        avaliacoesDocs = {};
 
         const cpfEl = document.getElementById('cred-cpf');
         const nomeEl = document.getElementById('cred-nome-input');
