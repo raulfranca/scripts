@@ -40,7 +40,7 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
 6. O usuário confere os dados e preenche/corrige:
    * **Nome do candidato** — campo editável pré-preenchido; deve ser corrigido se o protocolo foi enviado por outra pessoa.
    * **CPF** do candidato (campo com máscara automática `000.000.000-00`).
-   * **Função pretendida** (seleção única entre Educação Básica/Física/Artes).
+   * **Função pretendida** (múltipla seleção entre Educação Básica/Física/Artes).
    * **Regiões Escolares** de interesse (múltipla seleção entre as 5 regiões do município).
    * **Documentos** — pode clicar nos botões "Revisar" nativos e marcar como "OK" com os toggles injetados.
 7. O usuário pode trocar o credenciador no cabeçalho a qualquer momento; o marcador é atualizado imediatamente.
@@ -70,10 +70,10 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
 
   **Formulário de credenciamento (dentro do `.modal-body`, acima da tabela):** campos preenchidos/corrigidos pelo usuário:
   * **CPF** — input com máscara progressiva `000.000.000-00` (armazena só dígitos).
-  * **Função pretendida** — 3 botões, seleção única: Educação Básica (verde institucional), Educação Física (vermelho), Artes (laranja). Botões inativos com `opacity: 0.35`; ativo com `opacity: 1` e leve escala.
+  * **Função pretendida** — 3 botões, **múltipla seleção** (toggle): Educação Básica (verde institucional), Educação Física (vermelho), Artes (laranja). Botões inativos com `opacity: 0.35`; ativo com `opacity: 1` e leve escala.
   * **Regiões Escolares** — 5 botões, múltipla seleção (toggle): 1-Centro (amarelo), 2-Zona Oeste (verde institucional), 3-Zona Leste (vermelho), 4-Moreira César (verde), 5-Zona Rural (roxo).
 
-  **Tabela de documentos (conteúdo nativo do 1Doc):** carregada via AJAX dentro de `.div_lista_aprovacao_anexos`. Exibe cada documento categorizado com nome, data e botão "Revisar" nativo.
+  **Tabela de documentos (conteúdo nativo do 1Doc):** carregada via AJAX dentro de `.div_lista_aprovacao_anexos`. Exibe cada documento categorizado com nome, data e botão "Revisar" nativo. A linha "I - Ficha de Inscrição" é removida da tabela e movida para uma seção de destaque (`.cred-ficha-section`) posicionada entre o formulário e a tabela, contendo: label da categoria, inner table com os documentos e botões Sim/Não, e um aviso em fundo amarelo (*"Conferir se a ficha de inscrição é a versão retificada: 3 – Zona Leste, 4 – Moreira César."*).
 
   **Outros documentos anexos (injetado):** O script varre a tabela de despachos filhos (`#table_anexos_filhos`) em busca de anexos enviados em despachos posteriores que não são categorizados e portanto não aparecem na tabela nativa. Esses anexos são identificados comparando os `data-id_anexo` dos elementos `td.index` dentro de `#table_anexos_filhos` com os IDs decodificados (base64 `iea`) dos links do modal. A diferença é exibida numa seção "Outros documentos anexos" ao final da tabela, no mesmo formato visual (inner table com colunas Arquivo original, Em, Origem), com links clicáveis. A coluna "Em" mostra o número do despacho de onde o anexo foi extraído (obtido do `<strong data-im>` dentro do `table.despacho` ancestral). Nomes de arquivo longos são truncados via CSS (`text-overflow: ellipsis`, `max-width: 280px`) e o nome completo fica acessível em tooltip (`title`) ao fazer hover. Se não houver despachos posteriores ou anexos extras, a seção não aparece. Ao reabrir o modal (o AJAX do 1Doc recarrega a tabela), a seção é re-injetada automaticamente.
 
@@ -100,7 +100,7 @@ Os campos preenchidos manualmente são **descartados a cada novo protocolo** (n�
 | Variável | Tipo | Comportamento |
 |---|---|---|
 | `cpfDigitos` | `string` (só dígitos) | Resetado ao reabrir o painel ou mudar de URL |
-| `funcaoSelecionada` | `string \| null` | Seleção única; reset limpa `.active` de todos os botões |
+| `funcoesSelecionadas` | `string[]` | Múltipla seleção; reset limpa o array |
 | `regioesSelecionadas` | `number[]` | Múltipla seleção; reset limpa `.active` de todos |
 | `avaliacoesDocs` | `object` `{ [romana]: boolean }` | Avaliação Sim/Não por categoria; reset limpa o objeto |
 | `#cred-nome-confirmado` | `checkbox (DOM)` | Desmarcado no reset; o credenciador confirma que o nome confere com a ficha |
@@ -110,7 +110,9 @@ O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na de
 > **Hierarquia de validação ao clicar em "Copiar":**
 > 1. Checkbox "Este nome é igual ao que está na ficha de inscrição" — deve estar marcado.
 > 2. CPF — 11 dígitos completos.
-> 3. Botões Sim/Não — todos os grupos de categoria devem ter avaliação.
+> 3. Função pretendida — ao menos uma selecionada.
+> 4. Regiões Escolares — ao menos uma selecionada.
+> 5. Botões Sim/Não — todos os grupos de categoria devem ter avaliação.
 
 ### 3.4. Automação de Interface (Marcadores)
 

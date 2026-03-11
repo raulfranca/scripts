@@ -28,7 +28,7 @@
 
     // Estado por candidato (resetado a cada protocolo)
     let dadosExtraidos = null;   // { protocolo, url, candidato, dataEnvio }
-    let funcaoSelecionada = null; // string | null
+    let funcoesSelecionadas = []; // string[]
     let regioesSelecionadas = []; // number[]
     let cpfDigitos = '';          // apenas os dígitos do CPF
     let avaliacoesDocs = {};      // { 'I': true, 'II': false, ... } — true=Sim, false=Não, ausente=não avaliado
@@ -219,6 +219,13 @@
             text-align: center;
             white-space: nowrap;
         }
+        /* Aviso na seção da Ficha de Inscrição */
+        .cred-aviso-ficha {
+            background-color: #fcf8e3; border: 1px solid #faebcc;
+            color: #8a6d3b; border-radius: 4px;
+            padding: 5px 9px; font-size: 12px; margin-top: 6px;
+        }
+
         /* Alerta de erro de validação */
         .cred-alert-erro {
             background-color: #f2dede;
@@ -314,7 +321,7 @@
             </div>
             <div class="cred-form-section">
                 <label class="cred-section-label">Função pretendida</label>
-                <div class="cred-btn-group">
+                <div class="cred-btn-group" id="cred-funcao-group">
                     <button class="btn btn-mini cred-toggle-btn" data-funcao="Ed. Básica"><i class="icon-check-empty"></i> Educação Básica</button>
                     <button class="btn btn-mini cred-toggle-btn" data-funcao="Ed. Física"><i class="icon-check-empty"></i> Educação Física</button>
                     <button class="btn btn-mini cred-toggle-btn" data-funcao="Artes"><i class="icon-check-empty"></i> Artes</button>
@@ -322,7 +329,7 @@
             </div>
             <div class="cred-form-section">
                 <label class="cred-section-label">Regiões Escolares</label>
-                <div class="cred-btn-group">
+                <div class="cred-btn-group" id="cred-regiao-group">
                     <button class="btn btn-mini cred-toggle-btn" data-regiao="1"><i class="icon-check-empty"></i> 1 – Centro</button>
                     <button class="btn btn-mini cred-toggle-btn" data-regiao="2"><i class="icon-check-empty"></i> 2 – Zona Oeste</button>
                     <button class="btn btn-mini cred-toggle-btn" data-regiao="3"><i class="icon-check-empty"></i> 3 – Zona Leste</button>
@@ -353,16 +360,18 @@
             });
         }
 
-        // Função (seleção única)
+        // Função (múltipla seleção — toggle)
         modal.querySelectorAll('.cred-toggle-btn[data-funcao]').forEach(btn => {
             btn.addEventListener('click', () => {
-                modal.querySelectorAll('.cred-toggle-btn[data-funcao]').forEach(b => {
-                    b.classList.remove('active');
-                    b.querySelector('i').className = 'icon-check-empty';
-                });
-                btn.classList.add('active');
-                btn.querySelector('i').className = 'icon-white icon-check';
-                funcaoSelecionada = btn.dataset.funcao;
+                btn.classList.toggle('active');
+                const ativo = btn.classList.contains('active');
+                btn.querySelector('i').className = ativo ? 'icon-white icon-check' : 'icon-check-empty';
+                const f = btn.dataset.funcao;
+                if (ativo) {
+                    if (!funcoesSelecionadas.includes(f)) funcoesSelecionadas.push(f);
+                } else {
+                    funcoesSelecionadas = funcoesSelecionadas.filter(x => x !== f);
+                }
             });
         });
 
@@ -460,9 +469,9 @@
                     <span id="cred-res-data" class="cred-info-value">&mdash;</span>
                 </div>
                 <div class="cred-info-item" style="flex: 1;">
-                    <span class="cred-info-label">Nome do candidato</span>
+                    <span class="cred-info-label">Nome do(a) candidato(a)</span>
                     <input type="text" id="cred-nome-input" class="cred-nome-input"
-                           placeholder="Nome completo do candidato">
+                           placeholder="Nome completo do(a) candidato(a)">
                 </div>
             </div>
             <div class="cred-info-nome-row">
@@ -556,6 +565,11 @@
         fichaContainer.appendChild(label);
         adicionarColunaStatusNaTabela(innerTable, 'I');
         fichaContainer.appendChild(innerTable);
+
+        const avisoFicha = document.createElement('div');
+        avisoFicha.className = 'cred-aviso-ficha';
+        avisoFicha.innerHTML = 'Conferir se a ficha de inscrição é a <b>versão retificada</b>: 3 – Zona Leste, 4 – Moreira César. Caso não, procure ao final desta lista a seção "Outros documentos anexos".';
+        fichaContainer.appendChild(avisoFicha);
 
         // Remover a linha original da tabela
         fichaRow.remove();
@@ -789,7 +803,7 @@
      * Reseta o estado por candidato (campos do formulário e variáveis).
      */
     function resetarEstadoCandidato() {
-        funcaoSelecionada = null;
+        funcoesSelecionadas = [];
         regioesSelecionadas = [];
         cpfDigitos = '';
         dadosExtraidos = null;
@@ -982,6 +996,14 @@
             mostrarErroValidacao('cred-cpf', 'Preencha o CPF completo do candidato (11 dígitos) antes de continuar.');
             return false;
         }
+        if (funcoesSelecionadas.length === 0) {
+            mostrarErroValidacao('cred-funcao-group', 'Selecione ao menos uma Função pretendida antes de continuar.');
+            return false;
+        }
+        if (regioesSelecionadas.length === 0) {
+            mostrarErroValidacao('cred-regiao-group', 'Selecione ao menos uma Região Escolar antes de continuar.');
+            return false;
+        }
         const modal = document.getElementById('modal_aprovacao_anexos');
         const grupos = modal ? Array.from(modal.querySelectorAll('.cred-simnao-group')) : [];
         const pendentes = grupos.filter(g => !(g.dataset.categoria in avaliacoesDocs));
@@ -1114,7 +1136,7 @@
             ultimaUrl = location.href;
             jaRodouNestaPagina = false;
             dadosExtraidos = null;
-            funcaoSelecionada = null;
+            funcoesSelecionadas = [];
             regioesSelecionadas = [];
             cpfDigitos = '';
 
