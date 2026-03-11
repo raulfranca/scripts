@@ -8,7 +8,7 @@
 **Nome (`@name`):** 1Doc - Credenciamento de Professores
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
-**Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento.user.js`
+**Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js`
 **Versão atual:** `0.1.0`
 
 ---

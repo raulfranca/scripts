@@ -6,8 +6,8 @@
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=1doc.com.br
-// @updateURL    https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento.user.js
-// @downloadURL  https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento.user.js
+// @updateURL    https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js
+// @downloadURL  https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js
 // @grant        GM_addStyle
 // ==/UserScript==
 
