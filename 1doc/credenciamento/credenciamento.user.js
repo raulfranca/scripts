@@ -524,7 +524,7 @@
                         ? digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6,9)+'-'+digits.slice(9)
                         : '';
                     pixEl.value = pixFmt;
-                    chavePix = pixFmt;
+                    chavePix = digits.length === 11 ? digits : '';
                 }
             });
         }
@@ -685,7 +685,7 @@
 
         // Chave Pix
         const pixEl = document.getElementById('cred-chavepix');
-        if (pixEl) pixEl.addEventListener('input', (e) => { chavePix = e.target.value; });
+        if (pixEl) pixEl.addEventListener('input', (e) => { chavePix = e.target.value.replace(/\D/g, ''); });
 
         // Banco — campo de texto simples
         const bancoInput = document.getElementById('cred-banco-input');
@@ -1459,25 +1459,29 @@
         const valores = Object.values(avaliacoesDocs);
         const resultado = valores.includes(false) ? 'inabilitado' : 'habilitado';
 
-        // Montar array de 32 colunas (A–AF)
+        // Montar array de 37 colunas (A–AK)
         const cells = [
             dataEnvio,              // A
             protocolo,              // B (texto no plain, hyperlink no html)
             credenciadoraSalva,     // C
             candidato,              // D
             cpfDigitos,             // E
-            cep,                    // F
-            logradouro,             // G
-            numero,                 // H
-            bairro,                 // I
-            cidade,                 // J
-            bancoCOMPE,             // K
-            bancoNome,              // L
-            chavePix,               // M
-            colF, colG, colH,       // N, O, P
-            ...colRegioes,          // Q, R, S, T, U
-            ...colDocs,             // V–AF (XI docs = 11 cols)
-            resultado               // AG
+            rgDigitos,              // F
+            nacionalidade,          // G
+            estadoCivil,            // H
+            cep,                    // I
+            logradouro,             // J
+            numero,                 // K
+            bairro,                 // L
+            cidade,                 // M
+            email,                  // N
+            celularDigitos,         // O
+            bancoNome,              // P
+            chavePix,               // Q
+            colF, colG, colH,       // R, S, T
+            ...colRegioes,          // U, V, W, X, Y
+            ...colDocs,             // Z–AJ (XI docs = 11 cols)
+            resultado               // AK
         ];
 
         // text/plain: tabs separando valores, protocolo sem URL
