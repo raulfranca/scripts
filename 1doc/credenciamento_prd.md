@@ -64,10 +64,11 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
     - **Abrir automaticamente nos protocolos** (persiste em `localStorage`).
     - **Aplicar marcador automaticamente** (persiste em `localStorage`; quando desmarcado, todas as chamadas a `trocarMarcador` são bypassadas).
 
-  **Bloco de Identificação (fundo verde claro institucional):** exibe os dados extraídos automaticamente — Protocolo e Data/Hora. Valores renderizados como `—` até a extração ser concluída. Não editável.
+  **Bloco de Identificação (fundo verde claro institucional):** exibe os dados extraídos automaticamente — Protocolo, Data/Hora e Nome do candidato. O bloco é fixo (não está dentro do `.modal-body`), visível sempre no topo. Layout em duas linhas:
+  - *Linha 1:* Protocolo | Data/Hora | **Nome do candidato** (input editável, ocupa o espaço restante com `flex: 1`). Protocolo e Data/Hora renderizados como `—` até a extração ser concluída.
+  - *Linha 2 (separada por divider):* checkbox **"Este nome é igual ao que está na ficha de inscrição"** — começa **desmarcado** a cada protocolo. O credenciador precisa conferir o nome antes de marcar.
 
   **Formulário de credenciamento (dentro do `.modal-body`, acima da tabela):** campos preenchidos/corrigidos pelo usuário:
-  * **Nome do candidato** — input texto de largura total, pré-preenchido com o nome extraído da página. Editável. Aviso de atenção exibido diretamente abaixo do campo.
   * **CPF** — input com máscara progressiva `000.000.000-00` (armazena só dígitos).
   * **Função pretendida** — 3 botões, seleção única: Educação Básica (verde institucional), Educação Física (vermelho), Artes (laranja). Botões inativos com `opacity: 0.35`; ativo com `opacity: 1` e leve escala.
   * **Regiões Escolares** — 5 botões, múltipla seleção (toggle): 1-Centro (amarelo), 2-Zona Oeste (verde institucional), 3-Zona Leste (vermelho), 4-Moreira César (verde), 5-Zona Rural (roxo).
@@ -102,8 +103,14 @@ Os campos preenchidos manualmente são **descartados a cada novo protocolo** (n�
 | `funcaoSelecionada` | `string \| null` | Seleção única; reset limpa `.active` de todos os botões |
 | `regioesSelecionadas` | `number[]` | Múltipla seleção; reset limpa `.active` de todos |
 | `avaliacoesDocs` | `object` `{ [romana]: boolean }` | Avaliação Sim/Não por categoria; reset limpa o objeto |
+| `#cred-nome-confirmado` | `checkbox (DOM)` | Desmarcado no reset; o credenciador confirma que o nome confere com a ficha |
 
 O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na detecção de mudança de URL (`setInterval`).
+
+> **Hierarquia de validação ao clicar em "Copiar":**
+> 1. Checkbox "Este nome é igual ao que está na ficha de inscrição" — deve estar marcado.
+> 2. CPF — 11 dígitos completos.
+> 3. Botões Sim/Não — todos os grupos de categoria devem ter avaliação.
 
 ### 3.4. Automação de Interface (Marcadores)
 

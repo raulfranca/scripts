@@ -74,6 +74,25 @@ Usado pelo script de credenciamento como container principal de UI.
 * **Container da tabela:** `.div_lista_aprovacao_anexos` — Dentro do `.modal-body`. O conteúdo (tabela com documentos e botões "Revisar") é carregado via AJAX após o click no botão "Tabela".
 * **Header nativo:** `#modal_aprovacao_anexos .modal-header` — Contém título `<h3>` e botão fechar `data-dismiss="modal"`.
 * **Footer nativo:** `#modal_aprovacao_anexos .modal-footer` — Contém botão "Fechar" com classe `.cancelar` e `data-dismiss="modal"`.
+* **Responsividade vertical (telas pequenas):** O Bootstrap 2 não limita a altura do modal, então em monitores de baixa resolução o footer fica cortado. O padrão correto é transformar o modal em flex-coluna com `max-height: 94vh` e `top: 3vh` (ativado apenas com a classe `.in`), deixando o `.modal-body` crescer/encolher com `overflow-y: auto`. Todos os valores de posição precisam de `!important` porque o JS do Bootstrap 2 define `top` e `margin-top` via estilo inline, que tem precedência maior que CSS por classe.
+
+```css
+/* Aplicar via GM_addStyle */
+#modal_aprovacao_anexos.in {
+    display: flex !important;
+    flex-direction: column;
+    max-height: 94vh !important;
+    top: 3vh !important;
+    margin-top: 0 !important;
+}
+#modal_aprovacao_anexos .modal-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    min-height: 0;
+}
+```
+
+Em telas grandes, o conteúdo raramente atinge 94vh e o modal se comporta como antes (sem scroll). Em telas pequenas, apenas o body rola; header e footer permanecem visíveis. O modal ocupa de `3vh` a `97vh` no máximo. **Não usar `transform: translateY(-50%)`** — o Bootstrap 2 pode não sobrescrever o `top` via `!important` uniformemente e o transform empurraria o modal para cima do viewport.
 
 ### Anexos em Despachos (Avulsos)
 

@@ -177,6 +177,26 @@
             vertical-align: bottom;
         }
 
+        /* Nome do candidato dentro do bloco de identificação */
+        .cred-info-nome-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            border-top: 1px solid rgba(0, 102, 0, 0.15);
+            padding-top: 8px;
+        }
+        .cred-nome-confirma-label {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: #408d40;
+            cursor: pointer;
+            user-select: none;
+            margin-top: 2px;
+        }
+        .cred-nome-confirma-label input { cursor: pointer; accent-color: #005400; }
+
         /* Ocultar o header original quando injetado */
         #modal_aprovacao_anexos .cred-header-original-hidden { display: none; }
 
@@ -212,6 +232,22 @@
         /* Erro injetado diretamente em .div_lista_aprovacao_anexos (fora de .cred-form-section) */
         .div_lista_aprovacao_anexos > .cred-alert-erro {
             margin: 8px 15px;
+        }
+
+        /* Responsividade vertical: footer e header sempre visíveis em telas pequenas.
+           Flex-coluna com max-height no modal: apenas .modal-body rola internamente.
+           !important necessário para sobrescrever estilos inline definidos pelo JS do Bootstrap 2. */
+        #modal_aprovacao_anexos.in {
+            display: flex !important;
+            flex-direction: column;
+            max-height: 94vh !important;
+            top: 3vh !important;
+            margin-top: 0 !important;
+        }
+        #modal_aprovacao_anexos .modal-body {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            min-height: 0;
         }
     `);
 
@@ -271,14 +307,6 @@
         const formContainer = document.createElement('div');
         formContainer.id = 'cred-form-container';
         formContainer.innerHTML = `
-            <div class="cred-form-section">
-                <label class="cred-section-label" for="cred-nome-input">Nome do candidato</label>
-                <input type="text" id="cred-nome-input" class="cred-nome-input"
-                       placeholder="Nome completo do candidato">
-                <div class="alert" style="margin-top: 6px; margin-bottom: 0; padding: 6px 10px; font-size: 12px;">
-                    <strong>Atenção:</strong> O nome extraído é de quem enviou o protocolo. Corrija se o candidato for outra pessoa.
-                </div>
-            </div>
             <div class="cred-form-section">
                 <label class="cred-section-label" for="cred-cpf">CPF</label>
                 <input type="text" id="cred-cpf" class="cred-cpf-input"
@@ -431,6 +459,17 @@
                     <span class="cred-info-label">Data / Hora</span>
                     <span id="cred-res-data" class="cred-info-value">&mdash;</span>
                 </div>
+                <div class="cred-info-item" style="flex: 1;">
+                    <span class="cred-info-label">Nome do candidato</span>
+                    <input type="text" id="cred-nome-input" class="cred-nome-input"
+                           placeholder="Nome completo do candidato">
+                </div>
+            </div>
+            <div class="cred-info-nome-row">
+                <label class="cred-nome-confirma-label">
+                    <input type="checkbox" id="cred-nome-confirmado">
+                    Este nome é igual ao que está na ficha de inscrição
+                </label>
             </div>
         `;
 
@@ -766,6 +805,9 @@
         if (protEl) protEl.innerText = '\u2014';
         if (dataEl) dataEl.innerText = '\u2014';
 
+        const nomeConfirmadoEl = document.getElementById('cred-nome-confirmado');
+        if (nomeConfirmadoEl) nomeConfirmadoEl.checked = false;
+
         const modal = document.getElementById('modal_aprovacao_anexos');
         if (modal) {
             modal.querySelectorAll('.cred-toggle-btn').forEach(b => {
@@ -923,6 +965,19 @@
      * Retorna true se tudo estiver OK; false e exibe o primeiro erro caso contrário.
      */
     function validarFormulario() {
+        const checkNome = document.getElementById('cred-nome-confirmado');
+        if (!checkNome || !checkNome.checked) {
+            const nomeRow = checkNome
+                ? checkNome.closest('.cred-info-nome-row')
+                : document.querySelector('.cred-info-nome-row');
+            if (nomeRow) {
+                const erro = document.createElement('div');
+                erro.className = 'cred-alert-erro';
+                erro.textContent = 'Confirme que o nome do candidato coincide com a ficha de inscrição antes de continuar.';
+                nomeRow.appendChild(erro);
+            }
+            return false;
+        }
         if (cpfDigitos.length !== 11) {
             mostrarErroValidacao('cred-cpf', 'Preencha o CPF completo do candidato (11 dígitos) antes de continuar.');
             return false;
