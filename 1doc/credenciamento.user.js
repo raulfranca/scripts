@@ -187,7 +187,11 @@
         }
         .cred-simnao-group .cred-simnao-btn {
             opacity: 1;
-            transition: opacity 0.15s;
+            transition: opacity 0.15s, filter 0.15s;
+        }
+        .cred-simnao-group .cred-simnao-btn.inativo {
+            opacity: 0.5;
+            filter: grayscale(100%);
         }
         /* Célula mesclada (rowspan) que contém os botões Sim/Não */
         .cred-simnao-cell {
@@ -588,7 +592,8 @@
     /**
      * Cria um par de botões Sim/Não para uma categoria de documento.
      * O estado é registrado em avaliacoesDocs[categoria].
-     * Opacidade: ambos 100% no estado inicial; ao clicar num, o outro vai a 50%.
+     * Ao selecionar um botão, o outro fica inativo (cinza + 50% opacidade).
+     * Clicar no botão já selecionado deseleciona ambos, voltando ao estado inicial.
      */
     function criarGrupoBotoes(categoria) {
         const grupo = document.createElement('div');
@@ -599,16 +604,20 @@
             <button class="btn btn-danger btn-mini cred-simnao-btn">Não</button>
         `;
         const [btnSim, btnNao] = grupo.querySelectorAll('.cred-simnao-btn');
-        btnSim.addEventListener('click', () => {
-            avaliacoesDocs[categoria] = true;
-            btnSim.style.opacity = '1';
-            btnNao.style.opacity = '0.5';
-        });
-        btnNao.addEventListener('click', () => {
-            avaliacoesDocs[categoria] = false;
-            btnSim.style.opacity = '0.5';
-            btnNao.style.opacity = '1';
-        });
+        function selecionarBotao(clicado, outro, valor) {
+            if (avaliacoesDocs[categoria] === valor) {
+                delete avaliacoesDocs[categoria];
+                clicado.classList.remove('inativo');
+                outro.classList.remove('inativo');
+            } else {
+                avaliacoesDocs[categoria] = valor;
+                clicado.classList.remove('inativo');
+                outro.classList.add('inativo');
+            }
+            clicado.blur();
+        }
+        btnSim.addEventListener('click', () => selecionarBotao(btnSim, btnNao, true));
+        btnNao.addEventListener('click', () => selecionarBotao(btnNao, btnSim, false));
         return grupo;
     }
 

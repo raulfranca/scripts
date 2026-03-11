@@ -297,6 +297,35 @@ Para gestão de listas dinâmicas (ex: múltiplos nomes na busca), utilize Chips
 (CSS: Fundo #e6f2ff, texto e borda #005fcc, border-radius: 16px, display: inline-flex).
 
 
+#### Botões Sim/Não com Toggle (Avaliação de Documentos)
+
+Para avaliações binárias por categoria (ex: documentos ok/não ok), use pares de botões Bootstrap com comportamento de toggle:
+
+* **Seleção:** clicar em um botão adiciona `.inativo` ao outro (cinza via `filter: grayscale(100%)` + `opacity: 0.5`).
+* **Deselecionar:** clicar no botão já selecionado remove `.inativo` de ambos, restaurando o estado virgem.
+* O estado é registrado em `avaliacoesDocs[categoria]` (`true`=Sim, `false`=Não, ausente=não avaliado).
+
+```css
+.cred-simnao-btn { opacity: 1; transition: opacity 0.15s, filter 0.15s; }
+.cred-simnao-btn.inativo { opacity: 0.5; filter: grayscale(100%); }
+```
+
+```javascript
+function selecionarBotao(clicado, outro, valor) {
+    if (estado[cat] === valor) {        // toggle: deseleciona
+        delete estado[cat];
+        clicado.classList.remove('inativo');
+        outro.classList.remove('inativo');
+    } else {
+        estado[cat] = valor;
+        clicado.classList.remove('inativo');
+        outro.classList.add('inativo');
+    }
+}
+btnSim.addEventListener('click', () => selecionarBotao(btnSim, btnNao, true));
+btnNao.addEventListener('click', () => selecionarBotao(btnNao, btnSim, false));
+```
+
 ### Campos de Seleção em Dialogs (Evitar `<select>` nativo)
 
 O elemento `<select>` nativo tem renderização controlada pelo SO/browser e **não deve ser usado em dialogs injetados no 1Doc**. Tentativas de corrigir o texto cortado via CSS (`flex-grow`, `flex: 1 1 0 !important`, `min-width: 0 !important`) falharam consistentemente porque o Bootstrap do 1Doc sobrescreve as regras e o rendering interno do browser não é controlável via CSS da página.
