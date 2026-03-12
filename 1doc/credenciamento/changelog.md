@@ -9,6 +9,15 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+## [0.2.0] — 2026-03-12
+
+### Adicionado
+
+- **Marcador de ciclo automático:** ao executar o fluxo de extração, a função `aplicarMarcadorCiclo` calcula o ciclo do protocolo com base na data de envio (tabela de 10 ciclos, de 25/02 a 30/11/2026) e aplica o marcador correspondente (`— 01` a `— 10`) no select2 do 1Doc. Só age se o marcador correto ainda não estiver selecionado; remove qualquer outro marcador de ciclo antes de aplicar o novo. Se a data não se enquadrar em nenhum ciclo, registra `console.warn` e não altera os marcadores.
+- **Variável `cicloAtual`:** armazena o ciclo identificado (`'01'`–`'10'` ou `''`); resetada a cada candidato.
+- **Coluna AL na planilha:** `cicloAtual` adicionada como última coluna (posição 37) no array copiado para o Google Sheets. O total de colunas passa de 37 para **38** (A–AL).
+- **Abertura de anexos em janela separada:** links de anexo (`pg=doc/anexo`) dentro do modal abrem em uma janela popup dedicada (`window.open` com dimensões explícitas). O primeiro clique cria a janela; cliques seguintes abrem novas abas dentro dela (via `_credAnexosWin.open(url, '_blank')`), permitindo alternar entre o 1Doc e os PDFs com Alt+Tab sem perder a aba anterior.
+
 ## [0.1.0] — 2026-03-11
 
 Versão inicial funcional do painel de conferência de credenciamento.
@@ -48,4 +57,5 @@ Versão inicial funcional do painel de conferência de credenciamento.
 - **Resiliência a SPA**: ao navegar entre protocolos sem recarregar a página, o script restaura o modal ao estado original e reseta o estado do candidato automaticamente.
 
 [Não publicado]: https://github.com/raulfranca/scripts/compare/main...dev
+[0.2.0]: https://github.com/raulfranca/scripts/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/raulfranca/scripts/releases/tag/v0.1.0

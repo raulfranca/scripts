@@ -45,6 +45,12 @@
     let bancoCOMPE = '';          // código COMPE (sempre vazio — campo de texto livre)
     let chavePix = '';            // chave Pix (default: CPF formatado)
     let avaliacoesDocs = {};      // { 'I': true, 'II': false, ... } — true=Sim, false=Não, ausente=não avaliado
+    let concluido = false;        // true após "Concluir e copiar" — ativa modo congelado
+    let cicloAtual = '';          // ciclo do protocolo ('01'–'10' ou '' se fora de intervalo)
+    let _credAnexosWin = null;    // referência à janela de anexos (popup separada)
+
+    // URL da planilha de controle
+    const PLANILHA_URL = 'https://docs.google.com/spreadsheets/d/1OcFrOoA4DQqz1r9cOTKG7kDWyV5jX2xcMFJcf870qzY/edit?gid=0#gid=0';
 
     // Progresso — debounce timer para auto-save
     let _salvarProgressoTimer = null;
@@ -219,6 +225,31 @@
         }
         #cred-btn-executar.cred-incompleto:hover {
             background-color: #d9d9d9 !important;
+        }
+        #cred-btn-editar {
+            margin-right: 5px;
+            background-color: #c8a800 !important;
+            background-image: none !important;
+            border-color: #9e8400 !important;
+            color: #fff !important;
+            text-shadow: none !important;
+        }
+        #cred-btn-editar:hover {
+            background-color: #b39600 !important;
+        }
+        /* Campos congelados: legíveis mas visivelmente não-editáveis */
+        #modal_aprovacao_anexos input:disabled,
+        #modal_aprovacao_anexos textarea:disabled {
+            background-color: #f5f5f5 !important;
+            color: #555 !important;
+            cursor: default !important;
+            opacity: 1 !important;
+        }
+        #modal_aprovacao_anexos .cred-toggle-btn:disabled,
+        #modal_aprovacao_anexos .cred-estadocivil-btn:disabled,
+        #modal_aprovacao_anexos .cred-simnao-btn:disabled {
+            cursor: default !important;
+            opacity: 0.8 !important;
         }
 
         /* Seção da Ficha de Inscrição (destaque acima do formulário) */
@@ -880,6 +911,29 @@
             const progressoSalvo = carregarProgresso(dadosExtraidos.protocolo);
             if (progressoSalvo) restaurarProgresso(progressoSalvo);
         }
+
+        // Abrir links de anexo numa janela separada (popup).
+        // 1.º clique: abre janela nova; seguintes: abrem abas dentro dela.
+        // Usa onclick direto (não delegation) para garantir que o handler sobrescreve
+        // qualquer comportamento existente e não depende de propagação de evento.
+        modal.querySelectorAll('a[href*="pg=doc/anexo"]').forEach(a => {
+            a.onclick = function(e) {
+                e.preventDefault();
+                e.stopImmediatePropagation();
+                const url = this.href;
+                try {
+                    if (_credAnexosWin && !_credAnexosWin.closed) {
+                        _credAnexosWin.open(url, '_blank');
+                        _credAnexosWin.focus();
+                        return;
+                    }
+                } catch (_) { /* referência inválida, criar nova janela */ }
+                const w = Math.round(screen.availWidth * 0.85);
+                const h = Math.round(screen.availHeight * 0.9);
+                _credAnexosWin = window.open(url, 'cred-anexos',
+                    'width=' + w + ',height=' + h + ',left=80,top=40');
+            };
+        });
     }
 
     /**
@@ -1256,8 +1310,79 @@
                 const icon = b.querySelector('i');
                 if (icon) icon.className = 'icon-check-empty';
             });
+            modal.querySelectorAll('.cred-simnao-btn').forEach(btn => {
+                btn.classList.remove('inativo');
+            });
         }
+        concluido = false;
+        cicloAtual = '';
         atualizarBotaoConcluir();
+    }
+
+    /**
+     * Congela todos os campos do modal (modo somente-leitura após conclusão).
+     * Troca o botão para "Copiar" e injeta o botão "Editar" amarelo.
+     */
+    function ativarModoCongelado() {
+        concluido = true;
+        const modal = document.getElementById('modal_aprovacao_anexos');
+        if (!modal) return;
+
+        // Desabilitar inputs e botões interativos do formulário
+        modal.querySelectorAll(
+            '#cred-form-container input, #cred-nome-input, #cred-nome-confirmado'
+        ).forEach(el => { el.disabled = true; });
+        modal.querySelectorAll(
+            '.cred-toggle-btn, .cred-estadocivil-btn, .cred-simnao-btn'
+        ).forEach(btn => { btn.disabled = true; });
+
+        // Ajustar botão principal: "Copiar" verde
+        const btnEx = document.getElementById('cred-btn-executar');
+        if (btnEx) {
+            btnEx.textContent = 'Copiar';
+            btnEx.classList.remove('cred-incompleto');
+            btnEx.disabled = false;
+        }
+
+        // Injetar botão "Editar" se ainda não existir
+        if (!document.getElementById('cred-btn-editar')) {
+            const btnEditar = document.createElement('button');
+            btnEditar.id = 'cred-btn-editar';
+            btnEditar.className = 'btn';
+            btnEditar.textContent = 'Editar';
+            btnEditar.addEventListener('click', desativarModoCongelado);
+            btnEx.parentNode.insertBefore(btnEditar, btnEx);
+        }
+    }
+
+    /**
+     * Descongela os campos e restaura o fluxo normal de edição.
+     */
+    function desativarModoCongelado() {
+        concluido = false;
+        const modal = document.getElementById('modal_aprovacao_anexos');
+        if (!modal) return;
+
+        // Re-habilitar inputs e botões
+        modal.querySelectorAll(
+            '#cred-form-container input, #cred-nome-input, #cred-nome-confirmado'
+        ).forEach(el => { el.disabled = false; });
+        modal.querySelectorAll(
+            '.cred-toggle-btn, .cred-estadocivil-btn, .cred-simnao-btn'
+        ).forEach(btn => { btn.disabled = false; });
+
+        // Remover botão "Editar"
+        const btnEditar = document.getElementById('cred-btn-editar');
+        if (btnEditar) btnEditar.remove();
+
+        // Restaurar botão principal: "Concluir e copiar"
+        const btnEx = document.getElementById('cred-btn-executar');
+        if (btnEx) {
+            btnEx.textContent = 'Concluir e copiar';
+            atualizarBotaoConcluir();
+        }
+        // Salvar progresso sem a flag concluido
+        salvarProgresso();
     }
 
     // ==========================================
@@ -1274,6 +1399,7 @@
         const nomeConfEl = document.getElementById('cred-nome-confirmado');
         const dados = {
             ts: Date.now(),
+            concluido: concluido,
             candidato: nomeEl ? nomeEl.value : '',
             nomeConfirmado: nomeConfEl ? nomeConfEl.checked : false,
             cpf: cpfDigitos,
@@ -1303,6 +1429,7 @@
      * Retorna true se todos os campos obrigatórios estiverem preenchidos (verificação silenciosa).
      */
     function _estaCompleto() {
+        if (concluido) return true;
         if (!document.getElementById('cred-nome-confirmado')?.checked) return false;
         if (cpfDigitos.length !== 11) return false;
         if (rgDigitos.length < 8) return false;
@@ -1492,7 +1619,11 @@
         }
 
         atualizarChipHabilitacao();
-        atualizarBotaoConcluir();
+        if (dados.concluido) {
+            ativarModoCongelado();
+        } else {
+            atualizarBotaoConcluir();
+        }
 
         // --- Toast de feedback ---
         const modalFooter = document.querySelector('#modal_aprovacao_anexos .modal-footer');
@@ -1507,11 +1638,14 @@
                 if (dadosExtraidos) limparProgresso(dadosExtraidos.protocolo);
                 removerMarcadoresCredenciamento();
                 toast.remove();
+                if (concluido) desativarModoCongelado();
                 resetarEstadoCandidato();
                 if (isPaginaProtocolo()) executarFluxo();
             });
             toast.appendChild(btnDescartar);
-            modalFooter.insertBefore(toast, btnCopiar);
+            const btnEditar = document.getElementById('cred-btn-editar');
+            const anchorBtn = btnEditar || btnCopiar;
+            modalFooter.insertBefore(toast, anchorBtn);
             setTimeout(() => { if (toast.parentNode) toast.remove(); }, 8000);
         }
     }
@@ -1604,6 +1738,7 @@
             const dataEnvio = extrairDataEnvio();
 
             if (autoMarcador) trocarMarcador(credenciadoraSalva);
+            aplicarMarcadorCiclo(dataEnvio);
 
             dadosExtraidos = { protocolo, url, candidato, dataEnvio };
 
@@ -1794,11 +1929,27 @@
             return;
         }
 
-        // Limpar erros anteriores e validar
+        const btnExecutar = document.getElementById('cred-btn-executar');
+
+        // --- MODO CONCLUÍDO: apenas copia para o clipboard ---
+        if (concluido) {
+            btnExecutar.disabled = true;
+            try {
+                await copiarParaPlanilha();
+                window.open(PLANILHA_URL, 'cred-planilha');
+            } catch (error) {
+                console.error('Erro ao copiar dados:', error);
+                alert('Erro ao copiar dados para a área de transferência.');
+            } finally {
+                btnExecutar.disabled = false;
+            }
+            return;
+        }
+
+        // --- MODO NORMAL: validar, aplicar marcadores, concluir ---
         document.querySelectorAll('.cred-alert-erro').forEach(el => el.remove());
         if (!validarFormulario()) return;
 
-        const btnExecutar = document.getElementById('cred-btn-executar');
         btnExecutar.disabled = true;
 
         try {
@@ -1812,10 +1963,11 @@
             // 3. Aplicar marcador Conferido
             aplicarMarcadorResultado('Conferido');
 
-            // 4. Progresso mantido no localStorage (não limpar)
+            // 4. Marcar como concluído e salvar progresso
+            concluido = true;
+            salvarProgresso();
 
             // 5. Abrir planilha do credenciamento (reutiliza a aba se já estiver aberta)
-            const PLANILHA_URL = 'https://docs.google.com/spreadsheets/d/1OcFrOoA4DQqz1r9cOTKG7kDWyV5jX2xcMFJcf870qzY/edit?gid=0#gid=0';
             window.open(PLANILHA_URL, 'cred-planilha');
 
             // 6. Voltar para o inbox do 1Doc
@@ -1853,7 +2005,7 @@
         const valores = Object.values(avaliacoesDocs);
         const resultado = valores.includes(false) ? 'inabilitado' : 'habilitado';
 
-        // Montar array de 37 colunas (A–AK)
+        // Montar array de 38 colunas (A–AL)
         const cells = [
             dataEnvio,              // A
             protocolo,              // B (texto no plain, hyperlink no html)
@@ -1875,7 +2027,8 @@
             colF, colG, colH,       // R, S, T
             ...colRegioes,          // U, V, W, X, Y
             ...colDocs,             // Z–AJ (XI docs = 11 cols)
-            resultado               // AK
+            resultado,              // AK
+            cicloAtual              // AL
         ];
 
         // text/plain: tabs separando valores, protocolo sem URL
@@ -1957,6 +2110,100 @@
                     });
 
                     selectObj.val(currentValues).trigger('change');
+                }
+            })();
+        `;
+        document.body.appendChild(script);
+        script.remove();
+    }
+
+    /**
+     * Calcula o ciclo do protocolo com base em dataEnvio ("DD/MM/YYYY HH:MM") e
+     * aplica o marcador correspondente ("— 01" a "— 10") no select2 #marcadores_ids.
+     * Só altera o select2 se o marcador correto ainda não estiver selecionado.
+     */
+    function aplicarMarcadorCiclo(dataEnvio) {
+        if (!dataEnvio) return;
+
+        const partes = dataEnvio.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+        if (!partes) {
+            console.warn('[credenciamento] aplicarMarcadorCiclo: formato de data inesperado:', dataEnvio);
+            cicloAtual = '';
+            return;
+        }
+        const dia = parseInt(partes[1], 10);
+        const mes = parseInt(partes[2], 10);
+        const ano = parseInt(partes[3], 10);
+        const dataParsed = new Date(ano, mes - 1, dia);
+
+        const CICLOS = [
+            { num: '01', inicio: new Date(2026,  1, 25), fim: new Date(2026,  2, 11) },
+            { num: '02', inicio: new Date(2026,  2, 12), fim: new Date(2026,  2, 31) },
+            { num: '03', inicio: new Date(2026,  3,  1), fim: new Date(2026,  3, 30) },
+            { num: '04', inicio: new Date(2026,  4,  1), fim: new Date(2026,  4, 31) },
+            { num: '05', inicio: new Date(2026,  5,  1), fim: new Date(2026,  5, 30) },
+            { num: '06', inicio: new Date(2026,  6,  1), fim: new Date(2026,  6, 31) },
+            { num: '07', inicio: new Date(2026,  7,  1), fim: new Date(2026,  7, 31) },
+            { num: '08', inicio: new Date(2026,  8,  1), fim: new Date(2026,  8, 30) },
+            { num: '09', inicio: new Date(2026,  9,  1), fim: new Date(2026,  9, 31) },
+            { num: '10', inicio: new Date(2026, 10,  1), fim: new Date(2026, 10, 30) },
+        ];
+
+        let novoCiclo = '';
+        for (const c of CICLOS) {
+            if (dataParsed >= c.inicio && dataParsed <= c.fim) {
+                novoCiclo = c.num;
+                break;
+            }
+        }
+
+        if (!novoCiclo) {
+            console.warn('[credenciamento] aplicarMarcadorCiclo: data fora dos ciclos definidos:', dataEnvio);
+            cicloAtual = '';
+            return;
+        }
+
+        cicloAtual = novoCiclo;
+        const todosCiclos = ['01','02','03','04','05','06','07','08','09','10'];
+        const script = document.createElement('script');
+        script.textContent = `
+            (function() {
+                if (typeof $ !== 'undefined' && $('#marcadores_ids').length) {
+                    var selectObj = $('#marcadores_ids');
+                    var novoCiclo = ${JSON.stringify(novoCiclo)};
+                    var todosCiclos = ${JSON.stringify(todosCiclos)};
+
+                    // Verificar se o marcador correto já está selecionado
+                    var currentValues = selectObj.val() || [];
+                    var targetOption = selectObj.find('option').filter(function() {
+                        return $(this).text().indexOf('\u2014 ' + novoCiclo) > -1;
+                    });
+                    if (targetOption.length > 0 && currentValues.indexOf(targetOption.attr('value')) > -1) {
+                        return; // já aplicado, não fazer nada
+                    }
+
+                    // Remover outros marcadores de ciclo (01–10)
+                    var valuesToRemove = [];
+                    selectObj.find('option').each(function() {
+                        var texto = $(this).text();
+                        for (var i = 0; i < todosCiclos.length; i++) {
+                            if (texto.indexOf('\u2014 ' + todosCiclos[i]) > -1) {
+                                valuesToRemove.push($(this).attr('value'));
+                                break;
+                            }
+                        }
+                    });
+                    var newValues = currentValues.filter(function(v) {
+                        return valuesToRemove.indexOf(v) === -1;
+                    });
+
+                    // Adicionar o marcador do ciclo correto
+                    if (targetOption.length > 0) {
+                        var tagValue = targetOption.attr('value');
+                        if (newValues.indexOf(tagValue) === -1) newValues.push(tagValue);
+                    }
+
+                    selectObj.val(newValues).trigger('change');
                 }
             })();
         `;

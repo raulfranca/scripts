@@ -34,6 +34,8 @@
 | `bancoCOMPE` | `string` | por candidato | Sempre vazio — campo de texto livre, sem lookup |
 | `chavePix` | `string` | por candidato | Chave Pix (default: CPF formatado; editável) |
 | `avaliacoesDocs` | `object` | por candidato | `{ 'I': true/false, 'II': true/false, ... }` — `true`=Sim, `false`=Não, ausente=pendente |
+| `concluido` | `boolean` | por candidato | `true` após clicar em "Concluir e copiar" com sucesso; persiste no `localStorage`. Ativa modo congelado ao restaurar progresso. |
+| `cicloAtual` | `string` | por candidato | Ciclo identificado pela data de envio (`'01'`–`'10'`, ou `''` se fora de intervalo). Atualizado por `aplicarMarcadorCiclo`; resetado em `resetarEstadoCandidato`. |
 | `_salvarProgressoTimer` | `number\|null` | sessão | Timer ID do debounce de auto-save (300ms) |
 | `PROGRESSO_PREFIX` | `string` | constante | `'1doc_cred_progresso_'` — prefixo das chaves de progresso no localStorage |
 | `PROGRESSO_TTL_DIAS` | `number` | constante | `30` — dias após os quais entradas órfãs são removidas |
@@ -87,10 +89,13 @@
 | `getCategoriaLabel` | 1158 | `(grupo: Element) → string` | Retorna rótulo legível da categoria: categoria I → lê `label.cred-section-label`; demais → primeira `<td>` da linha externa da tabela |
 | `mostrarErroBotoes` | 1175 | `(primeiroGrupo, mensagem) → void` | Insere `.cred-alert-erro` próximo ao primeiro grupo pendente e rola até ele |
 | `validarFormulario` | 1193 | `() → boolean` | Valida sequencialmente: nome confirmado (checkbox), CPF 11 dígitos, ≥1 função, ≥1 região, e-mail válido (se preenchido), todos os Sim/Não respondidos |
-| `copiarEFechar` | 1688 | `async () → void` | Handler do botão "Concluir e copiar": sem dados → chama `executarFluxo`; com dados → limpa erros, valida, aplica marcador Habilitado/Inabilitado, chama `copiarParaPlanilha`, aplica marcador Conferido, **mantém progresso** e navega de volta ao inbox com `window.history.back()` |
-| `removerMarcadoresCredenciamento` | 1793 | `() → void` | Remove do select2 `#marcadores_ids` todos os marcadores das credenciadoras (`EQUIPE`) e os de status Habilitado/Inabilitado. Chamado pelo botão "Descartar" do toast de progresso restaurado. |
-| `aplicarMarcadorResultado` | 1822 | `(nome: string) → void` | Adiciona o marcador pelo nome (busca exata no select2 `#marcadores_ids`). Ao aplicar 'Habilitado', remove 'Inabilitado' e vice-versa. 'Conferido' é apenas acrescido. Usa inferência de `<script>` + jQuery nativo (mesmo padrão de `trocarMarcador`) |
-| `copiarParaPlanilha` | 1261 | `async () → void` | Monta 25 colunas (A–Y); escreve `text/plain` e `text/html` (protocolo como hyperlink) via `navigator.clipboard.write` |
+| `copiarEFechar` | 1688 | `async () → void` | Se `concluido`: apenas copia e abre planilha. Senão: valida, aplica marcadores Habilitado/Inabilitado + Conferido, seta `concluido=true`, salva progresso, abre planilha e navega ao inbox |
+| `removerMarcadoresCredenciamento` | 1793 | `() → void` | Remove do select2 todos os marcadores das credenciadoras (`EQUIPE`) e de status (Habilitado, Inabilitado, Conferido). Chamado pelo botão "Descartar" do toast. |
+| `aplicarMarcadorResultado` | 1822 | `(nome: string) → void` | Adiciona marcador pelo nome exato. Habilitado ↔ Inabilitado se remove mutuamente. Conferido é só acrescido. |
+| `ativarModoCongelado` | 1297 | `() → void` | Seta `concluido=true`, desabilita inputs/botões do formulário, troca botão para "Copiar" e injeta `#cred-btn-editar` amarelo |
+| `desativarModoCongelado` | 1332 | `() → void` | Seta `concluido=false`, re-habilita campos, remove `#cred-btn-editar`, restaura "Concluir e copiar", chama `atualizarBotaoConcluir` e `salvarProgresso` |
+| `copiarParaPlanilha` | 1261 | `async () → void` | Monta 38 colunas (A–AL); escreve `text/plain` e `text/html` (protocolo como hyperlink) via `navigator.clipboard.write`. Última coluna (AL) contém `cicloAtual`. |
+| `aplicarMarcadorCiclo` | 2092 | `(dataEnvio: string) → void` | Calcula o ciclo com base em `dataEnvio` ("DD/MM/YYYY HH:MM"); aplica o marcador `— 01`–`— 10` no select2 via script inline; só age se o marcador correto ainda não estiver selecionado; atualiza `cicloAtual`. |
 | `trocarMarcador` | 1318 | `(novoNome: string) → void` | Injeta `<script>` inline para alterar `#marcadores_ids` via jQuery do 1Doc: remove marcadores das outras credenciadoras, adiciona o da ativa |
 
 ### Seção 5 — Injeção do Botão na UI
