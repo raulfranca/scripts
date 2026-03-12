@@ -9,6 +9,16 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+## [0.2.1] — 2026-03-12
+
+### Adicionado
+
+- **Campo PIS/PASEP/NIT/NIS** no formulário de pagamento, à direita da Chave Pix. Máscara progressiva `XXX.XXXXX.XX-X` (11 dígitos). Valor armazenado em `pisDigitos` (apenas dígitos); resetado a cada protocolo.
+
+### Alterado
+
+- **Array `cells` em `copiarParaPlanilha` reescrito** com 40 posições (0–39, colunas A–AN): adicionada coluna Etnia reservada (colüna I, sempre vazia por enquanto), PIS/PASEP na coluna S, e ajuste de todas as colunas subsequentes (funções T–V, regiões W–AA, documentos AB–AL, resultado AM, ciclo AN).
+
 ## [0.2.0] — 2026-03-12
 
 ### Adicionado
@@ -57,5 +67,6 @@ Versão inicial funcional do painel de conferência de credenciamento.
 - **Resiliência a SPA**: ao navegar entre protocolos sem recarregar a página, o script restaura o modal ao estado original e reseta o estado do candidato automaticamente.
 
 [Não publicado]: https://github.com/raulfranca/scripts/compare/main...dev
+[0.2.1]: https://github.com/raulfranca/scripts/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/raulfranca/scripts/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/raulfranca/scripts/releases/tag/v0.1.0

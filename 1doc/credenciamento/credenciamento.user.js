@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      0.2.0
+// @version      0.2.1
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -44,6 +44,7 @@
     let bancoNome = '';           // nome do banco (campo de texto livre)
     let bancoCOMPE = '';          // código COMPE (sempre vazio — campo de texto livre)
     let chavePix = '';            // chave Pix (default: CPF formatado)
+    let pisDigitos = '';          // apenas os dígitos do PIS/PASEP (11 chars)
     let avaliacoesDocs = {};      // { 'I': true, 'II': false, ... } — true=Sim, false=Não, ausente=não avaliado
     let concluido = false;        // true após "Concluir e copiar" — ativa modo congelado
     let cicloAtual = '';          // ciclo do protocolo ('01'–'10' ou '' se fora de intervalo)
@@ -534,6 +535,12 @@
                         <input type="text" id="cred-chavepix" class="cred-cpf-input"
                                placeholder="CPF, e-mail, celular..." autocomplete="nope" style="width: 220px;">
                     </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-pis">PIS/PASEP/NIT/NIS</label>
+                        <input type="text" id="cred-pis" class="cred-cpf-input"
+                               placeholder="000.00000.00-0" maxlength="14" inputmode="numeric"
+                               autocomplete="nope" style="width: 160px;">
+                    </div>
                 </div>
             </div>
             <div class="cred-form-section">
@@ -725,6 +732,8 @@
                     if (baiEl) baiEl.value = bairro;
                     if (cidEl) cidEl.value = cidade;
                     atualizarBotaoConcluir();
+                    const numEl = document.getElementById('cred-numero');
+                    if (numEl) numEl.focus();
                 } catch (_) {
                     liberarCampos();
                     const erro = document.createElement('div');
@@ -755,6 +764,19 @@
         // Chave Pix
         const pixEl = document.getElementById('cred-chavepix');
         if (pixEl) pixEl.addEventListener('input', (e) => { chavePix = e.target.value.replace(/\D/g, ''); });
+
+        // PIS/PASEP
+        const pisEl = document.getElementById('cred-pis');
+        if (pisEl) pisEl.addEventListener('input', (e) => {
+            const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+            pisDigitos = digits;
+            let masked = digits;
+            if (digits.length > 10) masked = digits.slice(0,3) + '.' + digits.slice(3,8) + '.' + digits.slice(8,10) + '-' + digits.slice(10);
+            else if (digits.length > 8) masked = digits.slice(0,3) + '.' + digits.slice(3,8) + '.' + digits.slice(8);
+            else if (digits.length > 3) masked = digits.slice(0,3) + '.' + digits.slice(3,8);
+            else masked = digits;
+            e.target.value = masked;
+        });
 
         // Banco — campo de texto simples
         const bancoInput = document.getElementById('cred-banco-input');
@@ -1266,7 +1288,7 @@
         atualizarChipHabilitacao();
 
         cep = ''; logradouro = ''; numero = ''; bairro = ''; cidade = '';
-        bancoNome = ''; bancoCOMPE = ''; chavePix = '';
+        bancoNome = ''; bancoCOMPE = ''; chavePix = ''; pisDigitos = '';
 
         const cpfEl = document.getElementById('cred-cpf');
         const rgEl = document.getElementById('cred-rg');
@@ -1296,6 +1318,8 @@
         if (cidadeEl) cidadeEl.value = '';
         if (bancoInputEl) bancoInputEl.value = '';
         if (pixElReset) pixElReset.value = '';
+        const pisElReset = document.getElementById('cred-pis');
+        if (pisElReset) pisElReset.value = '';
         if (nomeEl) nomeEl.value = '';
         if (protEl) protEl.innerText = '\u2014';
         if (dataEl) dataEl.innerText = '\u2014';
@@ -2005,30 +2029,34 @@
         const valores = Object.values(avaliacoesDocs);
         const resultado = valores.includes(false) ? 'inabilitado' : 'habilitado';
 
-        // Montar array de 38 colunas (A–AL)
+        // Montar array de 40 posições (0–39) → colunas A–AN
         const cells = [
-            dataEnvio,              // A
-            protocolo,              // B (texto no plain, hyperlink no html)
-            credenciadoraSalva,     // C
-            candidato,              // D
-            cpfDigitos,             // E
-            rgDigitos,              // F
-            nacionalidade,          // G
-            estadoCivil,            // H
-            cep,                    // I
-            logradouro,             // J
-            numero,                 // K
-            bairro,                 // L
-            cidade,                 // M
-            email,                  // N
-            celularDigitos,         // O
-            bancoNome,              // P
-            chavePix,               // Q
-            colF, colG, colH,       // R, S, T
-            ...colRegioes,          // U, V, W, X, Y
-            ...colDocs,             // Z–AJ (XI docs = 11 cols)
-            resultado,              // AK
-            cicloAtual              // AL
+            dataEnvio,              // 0  A
+            protocolo,              // 1  B (texto no plain, hyperlink no html)
+            credenciadoraSalva,     // 2  C
+            candidato,              // 3  D
+            cpfDigitos,             // 4  E
+            rgDigitos,              // 5  F
+            nacionalidade,          // 6  G
+            estadoCivil,            // 7  H
+            '',                     // 8  I  — Etnia (campo reservado)
+            cep,                    // 9  J
+            logradouro,             // 10 K
+            numero,                 // 11 L
+            bairro,                 // 12 M
+            cidade,                 // 13 N
+            email,                  // 14 O
+            celularDigitos,         // 15 P
+            bancoNome,              // 16 Q
+            chavePix,               // 17 R
+            pisDigitos,             // 18 S  — PIS/PASEP/NIT/NIS
+            colF,                   // 19 T  — Educação Básica
+            colG,                   // 20 U  — Educação Física
+            colH,                   // 21 V  — Artes
+            ...colRegioes,          // 22–26 W–AA (5 regiões)
+            ...colDocs,             // 27–37 AB–AL (XI docs = 11 cols)
+            resultado,              // 38 AM
+            cicloAtual              // 39 AN
         ];
 
         // text/plain: tabs separando valores, protocolo sem URL

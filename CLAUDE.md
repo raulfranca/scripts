@@ -32,7 +32,9 @@ O versionamento/backup é feito pelo Git (branch `dev` → merge para `main` par
    * Os metadados do cabeçalho do script (versão, match, grant, etc.) forem modificados.
    * O usuário confirmar um novo comportamento que diverge do que está documentado.
 
-5. **Índice de funções (credenciamento)** — para edições em `credenciamento.user.js`, **não carregue o script inteiro**. Siga este fluxo:
+5. **Changelog** — ao final de toda tarefa que modifique funções, UI, variáveis de estado ou comportamento de qualquer script, registre a mudança na seção `## [Não publicado]` do `changelog.md` correspondente. Use as categorias do Keep a Changelog: `Adicionado`, `Alterado`, `Corrigido`, `Removido`. Não crie entrada se a única alteração foi em documentação ou comentários.
+
+6. **Índice de funções (credenciamento)** — para edições em `credenciamento.user.js`, **não carregue o script inteiro**. Siga este fluxo:
    1. Leia `credenciamento/credenciamento_index.md` para localizar a(s) função(ões) e variáveis relevantes.
    2. Use `#nomeDaFunção` no chat do Copilot para carregar apenas o contexto necessário (ex.: `#injetarControlesNoModal`, `#copiarParaPlanilha`).
    3. Se for necessário entender o fluxo completo, aí então leia o script inteiro.
