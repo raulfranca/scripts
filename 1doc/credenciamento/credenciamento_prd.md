@@ -9,7 +9,7 @@
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js`
-**Versão atual:** `0.1.0`
+**Versão atual:** `0.2.0`
 
 ---
 
@@ -94,9 +94,9 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
     - Cinza ("Em avaliação"): ao menos um dos 11 grupos sem avaliação.
     - Verde ("Habilitado(a)"): todos os 11 grupos marcados SIM.
     - Vermelho ("Inabilitado(a)"): ao menos um grupo marcado NÃO.
-  - **Botão "Copiar"** (`btn-success`) adicionado antes do botão "Fechar" existente. Desabilitado durante a extração.
+  - **Botão "Concluir e copiar"** (`btn-success`) adicionado antes do botão "Fechar" existente. Desabilitado durante a extração.
 
-* **Foco:** botão "Copiar" recebe `.focus()` ao fim da extração.
+* **Foco:** botão "Concluir e copiar" recebe `.focus()` ao fim da extração.
 * **Guard de injeção:** O atributo `data-cred-injetado` no modal evita duplicação. Na navegação SPA, os elementos injetados são removidos e o modal restaurado ao estado original.
 
 
@@ -114,7 +114,7 @@ O script deve ler o DOM da página do 1Doc para localizar:
 
 ### 3.3. Estado por Candidato (Persistido via localStorage)
 
-Os campos preenchidos pelo usuário são **salvos automaticamente** no `localStorage` a cada alteração (debounce de 300ms), usando o número do protocolo como chave (`1doc_cred_progresso_{protocolo}`). Ao reabrir o modal para o mesmo protocolo, o script restaura automaticamente os dados salvos, exibindo um toast informativo "Progresso restaurado automaticamente" com botão "Descartar". O progresso é **removido** após cópia bem-sucedida (`copiarEFechar`). Entradas com mais de 30 dias são limpas automaticamente na inicialização do script.
+Os campos preenchidos pelo usuário são **salvos automaticamente** no `localStorage` a cada alteração (debounce de 300ms), usando o número do protocolo como chave (`1doc_cred_progresso_{protocolo}`). Ao reabrir o modal para o mesmo protocolo, o script restaura automaticamente os dados salvos, exibindo um toast informativo "Progresso restaurado automaticamente" com botão "Descartar". O progresso é **mantido** no `localStorage` após cópia bem-sucedida (não é removido). Entradas com mais de 30 dias são limpas automaticamente na inicialização do script.
 
 Campos salvos no progresso:
 
@@ -141,7 +141,7 @@ Campos salvos no progresso:
 
 O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na detecção de mudança de URL (`setInterval`). Após o reset e a extração automática (`executarFluxo`), o script verifica se há progresso salvo para o protocolo atual e, em caso positivo, restaura os campos com `restaurarProgresso()`. Campos vazios no progresso salvo não sobrescrevem valores auto-extraídos (celular, e-mail).
 
-> **Hierarquia de validação ao clicar em "Copiar":**
+> **Hierarquia de validação ao clicar em "Concluir e copiar":**
 > 1. Checkbox "Este nome é igual ao que está na ficha de inscrição" — deve estar marcado.
 > 2. CPF — 11 dígitos completos.
 > 3. Função pretendida — ao menos uma selecionada.
@@ -193,9 +193,17 @@ Regras de transformação:
 * **Documentos:** Valores minúsculos (`sim`/`não`) conforme validação de dados da planilha.
 * **Resultado:** Minúsculo, sem acento.
 
-### 3.6. Área de Transferência — Passo Final
+### 3.6. Fluxo de Conclusão ("Concluir e copiar")
 
-Após a cópia bem-sucedida para o clipboard, o painel fecha automaticamente. O usuário deve colar manualmente na planilha do Google Sheets via Ctrl+V. O formato HTML rico garante que o hiperlink na coluna C seja preservado ao colar.
+Ao clicar em "Concluir e copiar" após validação bem-sucedida, o script executa sequencialmente:
+
+1. **Aplica marcador de resultado:** se algum documento foi marcado Não em `avaliacoesDocs`, aplica o marcador **"Inabilitado"** no protocolo; caso contrário, aplica **"Habilitado"**. O marcador oposto (Habilitado ↔ Inabilitado) é removido se estiver aplicado.
+2. **Copia para o clipboard:** monta as 37 colunas (A–AK) e chama `navigator.clipboard.write` com `text/html` e `text/plain`.
+3. **Aplica marcador "Conferido":** acrescenta o marcador "Conferido" ao protocolo (sem remover outros).
+4. **Mantém progresso:** o progresso no `localStorage` **não é apagado**, ficando disponível para consulta futura.
+5. **Navega para o inbox:** chama `window.history.back()` para retornar à página anterior (inbox do 1Doc).
+
+> A aplicação dos marcadores usa a função `aplicarMarcadorResultado(nome)`, análoga a `trocarMarcador` mas sem remover marcadores de outros membros da equipe.
 
 ---
 
@@ -207,7 +215,7 @@ Após a cópia bem-sucedida para o clipboard, o painel fecha automaticamente. O 
   | `1doc_cred_nome` | primeiro da equipe | Nome do credenciador selecionado |
   | `1doc_cred_auto` | `false` | Abrir dialog automaticamente nos protocolos |
   | `1doc_cred_marcador` | `true` | Aplicar/remover marcadores automaticamente |
-  | `1doc_cred_progresso_{protocolo}` | (não existe) | JSON com estado completo do formulário por candidato. Auto-salvo via debounce (300ms). Removido após cópia bem-sucedida. TTL: 30 dias. |
+  | `1doc_cred_progresso_{protocolo}` | (não existe) | JSON com estado completo do formulário por candidato. Auto-salvo via debounce (300ms). **Mantido** após cópia bem-sucedida (não é removido). TTL: 30 dias. |
 * **Resiliência a SPA (Single Page Application):** O 1Doc navega entre protocolos sem recarregar a página (via AJAX). O script implementa `setInterval` para monitorar a mudança de URL. Ao detectar mudança, remove todos os elementos injetados do modal (header, info block, formulário, botão copiar), restaura o header original, limpa o atributo `data-cred-injetado` e reseta o estado do candidato.
 * **Isolamento de Escopo:** O código roda em uma IIFE para não gerar conflito de variáveis globais com o sistema do 1Doc.
 * **Performance:** A injeção e extração não travam a interface principal do usuário (UI Thread). O uso de `setTimeout` é necessário para dar tempo de o DOM do 1Doc ser completamente renderizado antes da extração. O AJAX do modal nativo é monitorado via `setInterval(100ms)` com timeout de segurança.

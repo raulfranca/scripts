@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
+// @version      0.2.0
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -199,9 +199,26 @@
             background-color: #006600 !important;
         }
 
-        /* Botão Copiar no footer */
+        /* Botão Concluir e copiar no footer */
         #cred-btn-executar {
             margin-right: 5px;
+        }
+        #cred-btn-executar:not(.cred-incompleto):not([disabled]) {
+            background-color: #006600 !important;
+            background-image: none !important;
+            border-color: #004400 !important;
+            color: #fff !important;
+        }
+        #cred-btn-executar.cred-incompleto {
+            background-color: #e6e6e6 !important;
+            background-image: none !important;
+            border-color: #ccc !important;
+            color: #333 !important;
+            text-shadow: none !important;
+            box-shadow: none !important;
+        }
+        #cred-btn-executar.cred-incompleto:hover {
+            background-color: #d9d9d9 !important;
         }
 
         /* Seção da Ficha de Inscrição (destaque acima do formulário) */
@@ -676,6 +693,7 @@
                     if (logEl) logEl.value = logradouro;
                     if (baiEl) baiEl.value = bairro;
                     if (cidEl) cidEl.value = cidade;
+                    atualizarBotaoConcluir();
                 } catch (_) {
                     liberarCampos();
                     const erro = document.createElement('div');
@@ -839,11 +857,11 @@
         // --- Injetar botões Sim/Não por categoria ---
         injetarBotoesCategorias(modal);
 
-        // --- Modificar footer: adicionar botão Copiar ---
+        // --- Modificar footer: adicionar botão Concluir e copiar ---
         const modalFooter = modal.querySelector('.modal-footer');
         const btnCopiar = document.createElement('button');
         btnCopiar.id = 'cred-btn-executar';
-        btnCopiar.className = 'btn btn-success';
+        btnCopiar.className = 'btn btn-success cred-incompleto';
         btnCopiar.disabled = true;
         btnCopiar.textContent = 'Processando...';
         modalFooter.insertBefore(btnCopiar, modalFooter.firstChild);
@@ -1140,7 +1158,7 @@
             localStorage.setItem('1doc_cred_marcador', autoMarcador);
         });
 
-        // Botão Copiar
+        // Botão Concluir e copiar
         document.getElementById('cred-btn-executar').addEventListener('click', copiarEFechar);
 
         // Auto-save: nome do candidato e confirmação
@@ -1239,6 +1257,7 @@
                 if (icon) icon.className = 'icon-check-empty';
             });
         }
+        atualizarBotaoConcluir();
     }
 
     // ==========================================
@@ -1281,11 +1300,51 @@
     }
 
     /**
+     * Retorna true se todos os campos obrigatórios estiverem preenchidos (verificação silenciosa).
+     */
+    function _estaCompleto() {
+        if (!document.getElementById('cred-nome-confirmado')?.checked) return false;
+        if (cpfDigitos.length !== 11) return false;
+        if (rgDigitos.length < 8) return false;
+        if (!estadoCivil) return false;
+        if (cep.length !== 8) return false;
+        if (!logradouro.trim()) return false;
+        if (!numero.trim()) return false;
+        if (!bairro.trim()) return false;
+        if (!cidade.trim()) return false;
+        if (celularDigitos.length < 10) return false;
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+        if (!bancoNome.trim()) return false;
+        if (!(document.getElementById('cred-chavepix')?.value.trim())) return false;
+        if (funcoesSelecionadas.length === 0) return false;
+        if (regioesSelecionadas.length === 0) return false;
+        const modal = document.getElementById('modal_aprovacao_anexos');
+        const grupos = modal ? Array.from(modal.querySelectorAll('.cred-simnao-group')) : [];
+        if (grupos.some(g => !(g.dataset.categoria in avaliacoesDocs))) return false;
+        return true;
+    }
+
+    /**
+     * Atualiza a aparência do botão "Concluir e copiar" conforme o preenchimento.
+     * Verde (#006600) = completo; cinza = incompleto mas ainda clicável.
+     */
+    function atualizarBotaoConcluir() {
+        const btn = document.getElementById('cred-btn-executar');
+        if (!btn || btn.disabled) return;
+        if (_estaCompleto()) {
+            btn.classList.remove('cred-incompleto');
+        } else {
+            btn.classList.add('cred-incompleto');
+        }
+    }
+
+    /**
      * Agenda salvamento com debounce (300ms). Chamado pelos event listeners.
      */
     function agendarSalvarProgresso() {
         clearTimeout(_salvarProgressoTimer);
         _salvarProgressoTimer = setTimeout(salvarProgresso, 300);
+        atualizarBotaoConcluir();
     }
 
     /**
@@ -1433,6 +1492,7 @@
         }
 
         atualizarChipHabilitacao();
+        atualizarBotaoConcluir();
 
         // --- Toast de feedback ---
         const modalFooter = document.querySelector('#modal_aprovacao_anexos .modal-footer');
@@ -1445,6 +1505,7 @@
             btnDescartar.textContent = 'Descartar';
             btnDescartar.addEventListener('click', () => {
                 if (dadosExtraidos) limparProgresso(dadosExtraidos.protocolo);
+                removerMarcadoresCredenciamento();
                 toast.remove();
                 resetarEstadoCandidato();
                 if (isPaginaProtocolo()) executarFluxo();
@@ -1572,8 +1633,9 @@
             document.getElementById('cred-res-data').innerText = dataEnvio || '(não encontrada)';
             document.getElementById('cred-nome-input').value = candidato;
 
-            btnExecutar.textContent = 'Copiar';
+            btnExecutar.textContent = 'Concluir e copiar';
             btnExecutar.disabled = false;
+            atualizarBotaoConcluir();
             btnExecutar.focus();
 
         } catch (error) {
@@ -1659,16 +1721,57 @@
             mostrarErroValidacao('cred-cpf', 'Preencha o CPF completo do candidato (11 dígitos) antes de continuar.');
             return false;
         }
+        if (rgDigitos.length < 8) {
+            mostrarErroValidacao('cred-rg', 'Preencha o RG do candidato.');
+            return false;
+        }
+        if (!estadoCivil) {
+            mostrarErroValidacao('cred-estadocivil-group', 'Selecione o estado civil do candidato.');
+            return false;
+        }
+        if (cep.length !== 8) {
+            mostrarErroValidacao('cred-cep', 'Preencha o CEP completo (8 dígitos).');
+            return false;
+        }
+        if (!logradouro.trim()) {
+            mostrarErroValidacao('cred-logradouro', 'Preencha o logradouro.');
+            return false;
+        }
+        if (!numero.trim()) {
+            mostrarErroValidacao('cred-numero', 'Preencha o número do endereço.');
+            return false;
+        }
+        if (!bairro.trim()) {
+            mostrarErroValidacao('cred-bairro', 'Preencha o bairro.');
+            return false;
+        }
+        if (!cidade.trim()) {
+            mostrarErroValidacao('cred-cidade', 'Preencha a cidade.');
+            return false;
+        }
+        if (celularDigitos.length < 10) {
+            mostrarErroValidacao('cred-celular', 'Preencha o celular do candidato.');
+            return false;
+        }
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            mostrarErroValidacao('cred-email', 'Preencha um e-mail válido.');
+            return false;
+        }
+        if (!bancoNome.trim()) {
+            mostrarErroValidacao('cred-banco-input', 'Preencha o nome do banco.');
+            return false;
+        }
+        const pixValV = document.getElementById('cred-chavepix')?.value.trim();
+        if (!pixValV) {
+            mostrarErroValidacao('cred-chavepix', 'Preencha a Chave Pix.');
+            return false;
+        }
         if (funcoesSelecionadas.length === 0) {
             mostrarErroValidacao('cred-funcao-group', 'Selecione ao menos uma Função pretendida antes de continuar.');
             return false;
         }
         if (regioesSelecionadas.length === 0) {
             mostrarErroValidacao('cred-regiao-group', 'Selecione ao menos uma Região Escolar antes de continuar.');
-            return false;
-        }
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-            mostrarErroValidacao('cred-email', 'Preencha um e-mail válido ou deixe o campo em branco.');
             return false;
         }
         const modal = document.getElementById('modal_aprovacao_anexos');
@@ -1699,9 +1802,24 @@
         btnExecutar.disabled = true;
 
         try {
+            // 1. Aplicar marcador Habilitado ou Inabilitado
+            const algumNao = Object.values(avaliacoesDocs).includes(false);
+            aplicarMarcadorResultado(algumNao ? 'Inabilitado' : 'Habilitado');
+
+            // 2. Copiar conteúdo para o clipboard
             await copiarParaPlanilha();
-            if (dadosExtraidos && dadosExtraidos.protocolo) limparProgresso(dadosExtraidos.protocolo);
-            fecharDialog();
+
+            // 3. Aplicar marcador Conferido
+            aplicarMarcadorResultado('Conferido');
+
+            // 4. Progresso mantido no localStorage (não limpar)
+
+            // 5. Abrir planilha do credenciamento (reutiliza a aba se já estiver aberta)
+            const PLANILHA_URL = 'https://docs.google.com/spreadsheets/d/1OcFrOoA4DQqz1r9cOTKG7kDWyV5jX2xcMFJcf870qzY/edit?gid=0#gid=0';
+            window.open(PLANILHA_URL, 'cred-planilha');
+
+            // 6. Voltar para o inbox do 1Doc
+            window.location.href = 'https://pindamonhangaba.1doc.com.br/?pg=painel/listar&meu=0&trocar=1';
         } catch (error) {
             console.error('Erro ao copiar dados:', error);
             alert('Erro ao copiar dados para a área de transferência.');
@@ -1777,6 +1895,73 @@
             'text/html': blobHtml,
             'text/plain': blobText
         })]);
+    }
+
+    /**
+     * Remove todos os marcadores de credenciadoras (EQUIPE) e de status
+     * (Habilitado, Inabilitado) do select2 #marcadores_ids.
+     * Usado pelo botão "Descartar" do toast de progresso restaurado.
+     */
+    function removerMarcadoresCredenciamento() {
+        const nomesRemover = EQUIPE.map(n => n.toUpperCase())
+            .concat(['HABILITADO', 'INABILITADO', 'CONFERIDO']);
+        const script = document.createElement('script');
+        script.textContent = `
+            (function() {
+                if (typeof $ !== 'undefined' && $('#marcadores_ids').length) {
+                    var selectObj = $('#marcadores_ids');
+                    var nomesRemover = ${JSON.stringify(nomesRemover)};
+                    var currentValues = (selectObj.val() || []).filter(function(v) {
+                        var optText = selectObj.find('option[value="' + v + '"]').text().toUpperCase().trim();
+                        return nomesRemover.indexOf(optText) === -1;
+                    });
+                    selectObj.val(currentValues).trigger('change');
+                }
+            })();
+        `;
+        document.body.appendChild(script);
+        script.remove();
+    }
+
+    /**
+     * Adiciona um marcador por nome no select2 #marcadores_ids.
+     * Ao aplicar 'Habilitado', remove 'Inabilitado' e vice-versa.
+     * 'Conferido' é sempre acrescido sem remoções.
+     */
+    function aplicarMarcadorResultado(nome) {
+        const nomeUp = nome.toUpperCase();
+        const opostoUp = nomeUp === 'HABILITADO' ? 'INABILITADO'
+                       : nomeUp === 'INABILITADO' ? 'HABILITADO'
+                       : null;
+        const script = document.createElement('script');
+        script.textContent = `
+            (function() {
+                if (typeof $ !== 'undefined' && $('#marcadores_ids').length) {
+                    var selectObj = $('#marcadores_ids');
+                    var nomeUp = ${JSON.stringify(nomeUp)};
+                    var opostoUp = ${JSON.stringify(opostoUp)};
+
+                    // Remover marcador oposto (Habilitado ↔ Inabilitado)
+                    var currentValues = (selectObj.val() || []).filter(function(v) {
+                        if (!opostoUp) return true;
+                        var optText = selectObj.find('option[value="' + v + '"]').text().toUpperCase().trim();
+                        return optText !== opostoUp;
+                    });
+
+                    // Adicionar o marcador pelo nome (correspondência exata após trim)
+                    selectObj.find('option').each(function() {
+                        if ($(this).text().toUpperCase().trim() === nomeUp) {
+                            var val = $(this).attr('value');
+                            if (currentValues.indexOf(val) === -1) currentValues.push(val);
+                        }
+                    });
+
+                    selectObj.val(currentValues).trigger('change');
+                }
+            })();
+        `;
+        document.body.appendChild(script);
+        script.remove();
     }
 
     function trocarMarcador(novoNome) {

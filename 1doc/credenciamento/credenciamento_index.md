@@ -87,7 +87,9 @@
 | `getCategoriaLabel` | 1158 | `(grupo: Element) → string` | Retorna rótulo legível da categoria: categoria I → lê `label.cred-section-label`; demais → primeira `<td>` da linha externa da tabela |
 | `mostrarErroBotoes` | 1175 | `(primeiroGrupo, mensagem) → void` | Insere `.cred-alert-erro` próximo ao primeiro grupo pendente e rola até ele |
 | `validarFormulario` | 1193 | `() → boolean` | Valida sequencialmente: nome confirmado (checkbox), CPF 11 dígitos, ≥1 função, ≥1 região, e-mail válido (se preenchido), todos os Sim/Não respondidos |
-| `copiarEFechar` | 1237 | `async () → void` | Handler do botão Copiar: sem dados → chama `executarFluxo`; com dados → limpa erros, valida, chama `copiarParaPlanilha`, fecha modal |
+| `copiarEFechar` | 1688 | `async () → void` | Handler do botão "Concluir e copiar": sem dados → chama `executarFluxo`; com dados → limpa erros, valida, aplica marcador Habilitado/Inabilitado, chama `copiarParaPlanilha`, aplica marcador Conferido, **mantém progresso** e navega de volta ao inbox com `window.history.back()` |
+| `removerMarcadoresCredenciamento` | 1793 | `() → void` | Remove do select2 `#marcadores_ids` todos os marcadores das credenciadoras (`EQUIPE`) e os de status Habilitado/Inabilitado. Chamado pelo botão "Descartar" do toast de progresso restaurado. |
+| `aplicarMarcadorResultado` | 1822 | `(nome: string) → void` | Adiciona o marcador pelo nome (busca exata no select2 `#marcadores_ids`). Ao aplicar 'Habilitado', remove 'Inabilitado' e vice-versa. 'Conferido' é apenas acrescido. Usa inferência de `<script>` + jQuery nativo (mesmo padrão de `trocarMarcador`) |
 | `copiarParaPlanilha` | 1261 | `async () → void` | Monta 25 colunas (A–Y); escreve `text/plain` e `text/html` (protocolo como hyperlink) via `navigator.clipboard.write` |
 | `trocarMarcador` | 1318 | `(novoNome: string) → void` | Injeta `<script>` inline para alterar `#marcadores_ids` via jQuery do 1Doc: remove marcadores das outras credenciadoras, adiciona o da ativa |
 
