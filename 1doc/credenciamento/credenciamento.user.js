@@ -1,7 +1,7 @@
-// ==UserScript==
+﻿// ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      0.3.0
+// @version      0.4.0
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -49,6 +49,20 @@
     let concluido = false;        // true após "Concluir e copiar" — ativa modo congelado
     let cicloAtual = '';          // ciclo do protocolo ('01'–'10' ou '' se fora de intervalo)
     let _credAnexosWin = null;    // referência à janela de anexos (popup separada)
+
+    // Períodos de recebimento de inscrições (por ciclo)
+    const CICLOS = [
+        { num: '01', inicio: new Date(2026,  1, 25), fim: new Date(2026,  2, 11) },
+        { num: '02', inicio: new Date(2026,  2, 12), fim: new Date(2026,  2, 31) },
+        { num: '03', inicio: new Date(2026,  3,  1), fim: new Date(2026,  3, 30) },
+        { num: '04', inicio: new Date(2026,  4,  1), fim: new Date(2026,  4, 31) },
+        { num: '05', inicio: new Date(2026,  5,  1), fim: new Date(2026,  5, 30) },
+        { num: '06', inicio: new Date(2026,  6,  1), fim: new Date(2026,  6, 31) },
+        { num: '07', inicio: new Date(2026,  7,  1), fim: new Date(2026,  7, 31) },
+        { num: '08', inicio: new Date(2026,  8,  1), fim: new Date(2026,  8, 30) },
+        { num: '09', inicio: new Date(2026,  9,  1), fim: new Date(2026,  9, 31) },
+        { num: '10', inicio: new Date(2026, 10,  1), fim: new Date(2026, 10, 30) },
+    ];
 
     // URL da planilha de controle
     const PLANILHA_URL = 'https://docs.google.com/spreadsheets/d/1OcFrOoA4DQqz1r9cOTKG7kDWyV5jX2xcMFJcf870qzY/edit?gid=0#gid=0';
@@ -237,6 +251,17 @@
         }
         #cred-btn-editar:hover {
             background-color: #b39600 !important;
+        }
+        #cred-btn-duvida {
+            margin-right: 5px;
+            background-color: #c0392b !important;
+            background-image: none !important;
+            border-color: #962d22 !important;
+            color: #fff !important;
+            text-shadow: none !important;
+        }
+        #cred-btn-duvida:hover {
+            background-color: #a93226 !important;
         }
         /* Campos congelados: legíveis mas visivelmente não-editáveis */
         #modal_aprovacao_anexos input:disabled,
@@ -481,7 +506,7 @@
                     <div class="cred-field-block">
                         <label class="cred-section-label" for="cred-rg">RG</label>
                         <input type="text" id="cred-rg" class="cred-cpf-input"
-                               placeholder="00.000.000-0" maxlength="12" inputmode="numeric" autocomplete="nope">
+                               placeholder="00.000.000-0" maxlength="14" inputmode="numeric" autocomplete="nope">
                     </div>
                     <div class="cred-field-block">
                         <label class="cred-section-label" for="cred-nacionalidade">Nacionalidade</label>
@@ -629,10 +654,28 @@
         }
 
         // RG — máscara progressiva (00.000.000-0 com 9 dígitos; sem traço se apenas 8)
+        // Exceção: aceita 11 dígitos quando iguais ao CPF (uso de CPF no lugar do RG, previsto em lei)
         const rgEl = document.getElementById('cred-rg');
         if (rgEl) {
             rgEl.addEventListener('input', (e) => {
-                const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
+                let digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+                if (digits.length > 9) {
+                    const ehCpfCompleto = digits.length === 11 && digits === cpfDigitos;
+                    const digitandoCpf  = digits.length === 10 && cpfDigitos && cpfDigitos.startsWith(digits);
+                    if (ehCpfCompleto) {
+                        // Formato CPF: 000.000.000-00
+                        e.target.value = digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6,9)+'-'+digits.slice(9);
+                        rgDigitos = digits;
+                        return;
+                    } else if (digitandoCpf) {
+                        // Digitação incompleta do CPF — exibir parcial sem truncar
+                        e.target.value = digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6,9)+'-'+digits.slice(9);
+                        rgDigitos = digits;
+                        return;
+                    } else {
+                        digits = digits.slice(0, 9);
+                    }
+                }
                 let fmt = digits;
                 if (digits.length > 8)      fmt = digits.slice(0,2)+'.'+digits.slice(2,5)+'.'+digits.slice(5,8)+'-'+digits.slice(8);
                 else if (digits.length > 5) fmt = digits.slice(0,2)+'.'+digits.slice(2,5)+'.'+digits.slice(5);
@@ -934,7 +977,7 @@
         // --- Injetar botões Sim/Não por categoria ---
         injetarBotoesCategorias(modal);
 
-        // --- Modificar footer: adicionar botão Concluir e copiar ---
+        // --- Modificar footer: adicionar botão Concluir e copiar e botão Dúvida ---
         const modalFooter = modal.querySelector('.modal-footer');
         const btnCopiar = document.createElement('button');
         btnCopiar.id = 'cred-btn-executar';
@@ -942,6 +985,13 @@
         btnCopiar.disabled = true;
         btnCopiar.textContent = 'Processando...';
         modalFooter.insertBefore(btnCopiar, modalFooter.firstChild);
+
+        const btnDuvida = document.createElement('button');
+        btnDuvida.id = 'cred-btn-duvida';
+        btnDuvida.className = 'btn';
+        btnDuvida.textContent = 'Dúvida';
+        btnDuvida.title = 'Tem dúvidas sobre o preenchimento desta ficha? Clique aqui para aplicar o marcador "Dúvida" e voltar ao inbox. Seu progresso será salvo e você poderá retomar o credenciamento desta pessoa mais tarde.';
+        btnCopiar.insertAdjacentElement('afterend', btnDuvida);
 
         // Marcar como injetado
         modal.setAttribute('data-cred-injetado', 'true');
@@ -1259,6 +1309,16 @@
         // Botão Concluir e copiar
         document.getElementById('cred-btn-executar').addEventListener('click', copiarEFechar);
 
+        // Botão Dúvida: salva progresso, aplica marcador e volta ao inbox
+        const btnDuvidaEl = document.getElementById('cred-btn-duvida');
+        if (btnDuvidaEl) {
+            btnDuvidaEl.addEventListener('click', () => {
+                salvarProgresso();
+                aplicarMarcadorResultado('Dúvida');
+                window.location.href = 'https://pindamonhangaba.1doc.com.br/?pg=painel/listar&meu=0&trocar=1';
+            });
+        }
+
         // Auto-save: nome do candidato e confirmação
         const nomeInput = document.getElementById('cred-nome-input');
         if (nomeInput) nomeInput.addEventListener('input', agendarSalvarProgresso);
@@ -1479,7 +1539,7 @@
         if (concluido) return true;
         if (!document.getElementById('cred-nome-confirmado')?.checked) return false;
         if (cpfDigitos.length !== 11) return false;
-        if (rgDigitos.length < 8) return false;
+        if (rgDigitos.length < 8 || (rgDigitos.length > 9 && rgDigitos !== cpfDigitos)) return false;
         if (!estadoCivil) return false;
         if (cep.length !== 8) return false;
         if (!logradouro.trim()) return false;
@@ -1506,11 +1566,15 @@
     function atualizarBotaoConcluir() {
         const btn = document.getElementById('cred-btn-executar');
         if (!btn || btn.disabled) return;
-        if (_estaCompleto()) {
+        const completo = _estaCompleto();
+        if (completo) {
             btn.classList.remove('cred-incompleto');
         } else {
             btn.classList.add('cred-incompleto');
         }
+        // Botão Dúvida: visível apenas enquanto o preenchimento não está completo
+        const btnDuvida = document.getElementById('cred-btn-duvida');
+        if (btnDuvida) btnDuvida.style.display = completo ? 'none' : '';
     }
 
     /**
@@ -1585,7 +1649,8 @@
         if (rgDigitos) {
             const d = rgDigitos;
             let fmt = d;
-            if (d.length > 8)      fmt = d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'-'+d.slice(8);
+            if (d.length === 11)   fmt = d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6,9)+'-'+d.slice(9);
+            else if (d.length > 8) fmt = d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'-'+d.slice(8);
             else if (d.length > 5) fmt = d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5);
             else if (d.length > 2) fmt = d.slice(0,2)+'.'+d.slice(2);
             setVal('cred-rg', fmt);
@@ -1928,8 +1993,10 @@
             mostrarErroValidacao('cred-cpf', 'Preencha o CPF completo do candidato (11 dígitos) antes de continuar.');
             return false;
         }
-        if (rgDigitos.length < 8) {
-            mostrarErroValidacao('cred-rg', 'Preencha o RG do candidato.');
+        if (rgDigitos.length < 8 || (rgDigitos.length > 9 && rgDigitos !== cpfDigitos)) {
+            mostrarErroValidacao('cred-rg', rgDigitos.length > 9
+                ? 'RG com mais de 9 dígitos só é aceito quando igual ao CPF (CPF no lugar de RG).'
+                : 'Preencha o RG do candidato.');
             return false;
         }
         if (!estadoCivil) {
@@ -2107,8 +2174,29 @@
             // 5. Abrir planilha do credenciamento (reutiliza a aba se já estiver aberta)
             window.open(PLANILHA_URL, 'cred-planilha');
 
-            // 6. Voltar para o inbox do 1Doc
-            window.location.href = 'https://pindamonhangaba.1doc.com.br/?pg=painel/listar&meu=0&trocar=1';
+            // 6. Arquivar o protocolo (o 1Doc redireciona ao inbox automaticamente após a confirmação)
+            const btnArquivar = document.querySelector('button.botao_flutuante_3.bf_v_3[title="Arquivar"]')
+                             || document.querySelector('button[title="Arquivar"].botao_flutuante_3');
+            if (btnArquivar) {
+                btnArquivar.click();
+                // Aguardar o dialog de confirmação (#sim) aparecer e clicar nele
+                let tentativas = 0;
+                const aguardarSim = setInterval(() => {
+                    const btnSim = document.getElementById('sim');
+                    if (btnSim) {
+                        clearInterval(aguardarSim);
+                        btnSim.click();
+                    } else if (++tentativas >= 50) { // timeout 5s
+                        clearInterval(aguardarSim);
+                        console.warn('[credenciamento] Dialog de confirmação do Arquivar não apareceu.');
+                        window.location.href = 'https://pindamonhangaba.1doc.com.br/?pg=painel/listar&meu=0&trocar=1';
+                    }
+                }, 100);
+            } else {
+                // Fallback: botão Arquivar não encontrado, navegar ao inbox diretamente
+                console.warn('[credenciamento] Botão Arquivar não encontrado — navegando ao inbox.');
+                window.location.href = 'https://pindamonhangaba.1doc.com.br/?pg=painel/listar&meu=0&trocar=1';
+            }
         } catch (error) {
             console.error('Erro ao copiar dados:', error);
             alert('Erro ao copiar dados para a área de transferência.');
@@ -2193,7 +2281,7 @@
 
     /**
      * Remove todos os marcadores de credenciadoras (EQUIPE) e de status
-     * (Habilitado, Inabilitado) do select2 #marcadores_ids.
+     * (Habilitado, Inabilitado, Conferido) do select2 #marcadores_ids.
      * Usado pelo botão "Descartar" do toast de progresso restaurado.
      */
     function removerMarcadoresCredenciamento() {
@@ -2276,19 +2364,6 @@
         const mes = parseInt(partes[2], 10);
         const ano = parseInt(partes[3], 10);
         const dataParsed = new Date(ano, mes - 1, dia);
-
-        const CICLOS = [
-            { num: '01', inicio: new Date(2026,  1, 25), fim: new Date(2026,  2, 11) },
-            { num: '02', inicio: new Date(2026,  2, 12), fim: new Date(2026,  2, 31) },
-            { num: '03', inicio: new Date(2026,  3,  1), fim: new Date(2026,  3, 30) },
-            { num: '04', inicio: new Date(2026,  4,  1), fim: new Date(2026,  4, 31) },
-            { num: '05', inicio: new Date(2026,  5,  1), fim: new Date(2026,  5, 30) },
-            { num: '06', inicio: new Date(2026,  6,  1), fim: new Date(2026,  6, 31) },
-            { num: '07', inicio: new Date(2026,  7,  1), fim: new Date(2026,  7, 31) },
-            { num: '08', inicio: new Date(2026,  8,  1), fim: new Date(2026,  8, 30) },
-            { num: '09', inicio: new Date(2026,  9,  1), fim: new Date(2026,  9, 31) },
-            { num: '10', inicio: new Date(2026, 10,  1), fim: new Date(2026, 10, 30) },
-        ];
 
         let novoCiclo = '';
         for (const c of CICLOS) {

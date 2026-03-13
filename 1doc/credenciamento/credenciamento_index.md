@@ -2,7 +2,7 @@
 
 > Arquivo: `1doc/credenciamento/credenciamento.user.js`
 >
-> **Como usar:** ao invés de carregar o script inteiro, consulte este índice para localizar a função ou variável relevante e referencie `#nomeDaFunção` no chat do Copilot para carregar apenas o contexto necessário. Carregue o script completo apenas quando precisar da visão geral do fluxo.
+> **Como usar:** consulte este índice para identificar a função ou variável relevante pelo nome e depois busque-a no script via regex. Carregue o script completo apenas quando precisar da visão geral do fluxo.
 
 ---
 
@@ -37,6 +37,7 @@
 | `avaliacoesDocs` | `object` | por candidato | `{ 'I': true/false, 'II': true/false, ... }` — `true`=Sim, `false`=Não, ausente=pendente |
 | `concluido` | `boolean` | por candidato | `true` após clicar em "Concluir e copiar" com sucesso; persiste no `localStorage`. Ativa modo congelado ao restaurar progresso. |
 | `cicloAtual` | `string` | por candidato | Ciclo identificado pela data de envio (`'01'`–`'10'`, ou `''` se fora de intervalo). Atualizado por `aplicarMarcadorCiclo`; resetado em `resetarEstadoCandidato`. |
+| `CICLOS` | `object[]` | constante | Períodos de recebimento de inscrições por ciclo (`{ num, inicio, fim }`). Declarado no escopo de módulo (seção 1). |
 | `_salvarProgressoTimer` | `number\|null` | sessão | Timer ID do debounce de auto-save (300ms) |
 | `PROGRESSO_PREFIX` | `string` | constante | `'1doc_cred_progresso_'` — prefixo das chaves de progresso no localStorage |
 | `PROGRESSO_TTL_DIAS` | `number` | constante | `30` — dias após os quais entradas órfãs são removidas |
@@ -47,70 +48,69 @@
 
 ### Seção 3 — Injeção de Controles no Modal
 
-| Função | Linha | Assinatura | Descrição |
-|---|---|---|---|
-| `abrirModalTabela` | 316 | `() → boolean` | Clica em `a.link_tabela_revisao_anexos`; retorna `false` se não encontrado no DOM |
-| `aguardarModalEInjetar` | 327 | `() → void` | Polling (100ms, até 10s) aguarda `#modal_aprovacao_anexos` visível e com tabela carregada; chama `injetarControlesNoModal` |
-| `criarFormulario` | 360 | `() → HTMLElement` | Retorna `<div id="cred-form-container">` com campos: CPF, RG, Nacionalidade, Estado civil, Celular, E-mail, Função, Regiões |
-| `formatarCelular` | 431 | `(digits: string) → string` | Formata string de dígitos em `(00) 00000-0000` (11 dígitos) ou `(00) 0000-0000` (10 dígitos); progressivo durante digitação |
-| `registrarEventListenersFormulario` | 442 | `(modal: Element) → void` | Registra máscaras progressivas e handlers dos campos: CPF, RG, Nacionalidade, Estado civil, Celular, E-mail, Função (toggle múltiplo), Regiões (toggle múltiplo) |
-| `injetarControlesNoModal` | 542 | `(modal: Element) → void` | **Orquestrador principal**: injeta header, info-block, formulário, ficha, outros-anexos, botões Sim/Não e footer; guard via atributo `data-cred-injetado`; chama `resetarEstadoCandidato` e `executarFluxo` |
-| `moverFichaInscricao` | 675 | `(modal, modalBody, formContainer) → void` | Remove linha "I - Ficha de Inscrição" da tabela nativa e a reposiciona como `<div id="cred-ficha-inscricao">` acima do formulário; chama `adicionarColunaStatusNaTabela` para categoria `'I'` |
-| `injetarOutrosAnexos` | 732 | `(modal: Element) → void` | Compara IDs de `#table_anexos_filhos` com os já no modal (via parâmetro `iea` base64); injeta linha `#cred-outros-anexos` com anexos avulsos de despachos posteriores |
-| `criarGrupoBotoes` | 812 | `(categoria: string) → HTMLElement` | Cria `<div class="cred-simnao-group" data-categoria="…">` com botões Sim/Não; toggle: clique duplo deseleciona; atualiza `avaliacoesDocs` e chama `atualizarChipHabilitacao` |
-| `adicionarColunaStatusNaTabela` | 846 | `(innerTable: Element, categoria: string) → void` | Reutiliza coluna "Status da revisão" da inner table; injeta `criarGrupoBotoes` com `rowspan`; oculta botões "Revisar" nativos; fallback: adiciona coluna no final |
-| `injetarBotoesCategorias` | 897 | `(modal: Element) → void` | Itera linhas da tabela principal; para cada com algarismo romano (I–XI) chama `adicionarColunaStatusNaTabela` |
-| `registrarEventListeners` | 915 | `(modal: Element) → void` | Registra handlers: seleção de credenciadora (persiste em `localStorage`, chama `trocarMarcador`), checkboxes de preferência, botão Copiar → `copiarEFechar`; chama `registrarEventListenersFormulario` |
-| `atualizarChipHabilitacao` | 956 | `() → void` | Atualiza `#cred-chip-habilitacao`: verde = todos Sim, vermelho = ≥1 Não, cinza = algum pendente |
-| `resetarEstadoCandidato` | 1139 | `() → void` | Zera todas as variáveis por candidato e limpa os campos do formulário no DOM (inputs, checkboxes, botões toggle) |
+| Função | Descrição |
+|---|---|
+| `abrirModalTabela` | Clica em `a.link_tabela_revisao_anexos`; retorna `false` se não encontrado no DOM |
+| `aguardarModalEInjetar` | Polling (100ms, até 10s) aguarda `#modal_aprovacao_anexos` visível e com tabela carregada; chama `injetarControlesNoModal` |
+| `criarFormulario` | Retorna `<div id="cred-form-container">` com campos: CPF, RG, Nacionalidade, Estado civil, Celular, E-mail, Função, Regiões |
+| `formatarCelular` | Formata string de dígitos em `(00) 00000-0000` (11 dígitos) ou `(00) 0000-0000` (10 dígitos); progressivo durante digitação |
+| `registrarEventListenersFormulario` | Registra máscaras progressivas e handlers dos campos: CPF, RG, Nacionalidade, Estado civil, Celular, E-mail, Função (toggle múltiplo), Regiões (toggle múltiplo) |
+| `injetarControlesNoModal` | **Orquestrador principal**: injeta header, info-block, formulário, ficha, outros-anexos, botões Sim/Não e footer; guard via atributo `data-cred-injetado`; chama `resetarEstadoCandidato` e `executarFluxo` |
+| `moverFichaInscricao` | Remove linha "I - Ficha de Inscrição" da tabela nativa e a reposiciona como `<div id="cred-ficha-inscricao">` acima do formulário; chama `adicionarColunaStatusNaTabela` para categoria `'I'` |
+| `injetarOutrosAnexos` | Compara IDs de `#table_anexos_filhos` com os já no modal (via parâmetro `iea` base64); injeta linha `#cred-outros-anexos` com anexos avulsos de despachos posteriores |
+| `criarGrupoBotoes` | Cria `<div class="cred-simnao-group" data-categoria="…">` com botões Sim/Não; toggle: clique duplo deseleciona; atualiza `avaliacoesDocs` e chama `atualizarChipHabilitacao` |
+| `adicionarColunaStatusNaTabela` | Reutiliza coluna "Status da revisão" da inner table; injeta `criarGrupoBotoes` com `rowspan`; oculta botões "Revisar" nativos; fallback: adiciona coluna no final |
+| `injetarBotoesCategorias` | Itera linhas da tabela principal; para cada com algarismo romano (I–XI) chama `adicionarColunaStatusNaTabela` |
+| `registrarEventListeners` | Registra handlers: seleção de credenciadora (persiste em `localStorage`, chama `trocarMarcador`), checkboxes de preferência, botão Copiar → `copiarEFechar`, botão Dúvida → salva progresso + aplica marcador "Dúvida" + navega ao inbox; chama `registrarEventListenersFormulario` |
+| `atualizarChipHabilitacao` | Atualiza `#cred-chip-habilitacao`: verde = todos Sim, vermelho = ≥1 Não, cinza = algum pendente |
+| `resetarEstadoCandidato` | Zera todas as variáveis por candidato e limpa os campos do formulário no DOM (inputs, checkboxes, botões toggle) |
 
 ### Seção 4B — Persistência de Progresso (localStorage)
 
-| Função | Linha | Assinatura | Descrição |
-|---|---|---|---|
-| `salvarProgresso` | 1252 | `() → void` | Serializa todos os campos do candidato + nome/confirmação e grava em `localStorage` com chave `PROGRESSO_PREFIX + protocolo`. Só opera se `dadosExtraidos` existir. |
-| `agendarSalvarProgresso` | 1286 | `() → void` | Debounce (300ms) para `salvarProgresso`. Chamado pelos event listeners de input/click no formulário e botões Sim/Não. |
-| `carregarProgresso` | 1294 | `(protocolo: string) → object\|null` | Busca progresso salvo no localStorage. Retorna objeto parsed ou `null`. |
-| `limparProgresso` | 1304 | `(protocolo: string) → void` | Remove a chave de progresso do localStorage. Chamado após cópia bem-sucedida. |
-| `restaurarProgresso` | 1313 | `(dados: object) → void` | Restaura variáveis JS e DOM (inputs, toggles, botões Sim/Não) a partir de um objeto de progresso salvo. Campos vazios no progresso não sobrescrevem auto-extraídos. Exibe toast "Progresso restaurado" com botão "Descartar". Chama `atualizarChipHabilitacao`. |
-| `limparProgressoAntigo` | 1460 | `() → void` | Varre chaves `1doc_cred_progresso_*` e remove as com `ts` mais antigo que 30 dias. Chamado uma vez na inicialização. |
-
-| `abrirDialog` | 1475 | `() → void` | Se modal já aberto: re-injeta via `injetarControlesNoModal`; senão: chama `abrirModalTabela` + `aguardarModalEInjetar` |
-| `fecharDialog` | 1042 | `() → void` | Clica no botão nativo `.cancelar` do footer do modal (Bootstrap 2 dismiss) |
+| Função | Descrição |
+|---|---|
+| `salvarProgresso` | Serializa todos os campos do candidato + nome/confirmação e grava em `localStorage` com chave `PROGRESSO_PREFIX + protocolo`. Só opera se `dadosExtraidos` existir. |
+| `agendarSalvarProgresso` | Debounce (300ms) para `salvarProgresso`. Chamado pelos event listeners de input/click no formulário e botões Sim/Não. |
+| `carregarProgresso` | Busca progresso salvo no localStorage. Retorna objeto parsed ou `null`. |
+| `limparProgresso` | Remove a chave de progresso do localStorage. Chamado após cópia bem-sucedida. |
+| `restaurarProgresso` | Restaura variáveis JS e DOM (inputs, toggles, botões Sim/Não) a partir de um objeto de progresso salvo. Campos vazios no progresso não sobrescrevem auto-extraídos. Exibe toast "Progresso restaurado" com botão "Descartar". Chama `atualizarChipHabilitacao`. |
+| `limparProgressoAntigo` | Varre chaves `1doc_cred_progresso_*` e remove as com `ts` mais antigo que 30 dias. Chamado uma vez na inicialização. |
+| `abrirDialog` | Se modal já aberto: re-injeta via `injetarControlesNoModal`; senão: chama `abrirModalTabela` + `aguardarModalEInjetar` |
+| `fecharDialog` | Clica no botão nativo `.cancelar` do footer do modal (Bootstrap 2 dismiss) |
 
 ### Seção 4 — Lógica de Extração e Cópia
 
-| Função | Linha | Assinatura | Descrição |
-|---|---|---|---|
-| `isPaginaProtocolo` | 1054 | `() → boolean` | `location.href.includes('pg=doc/ver')` |
-| `extrairNomeCandidato` | 1058 | `() → string` | Extrai nome de `span.pp`: prioriza atributo `data-content`; fallback: clone sem `<img>`; último fallback: mensagem manual |
-| `extrairDataEnvio` | 1074 | `() → string` | Extrai data/hora de `.well.well-header .row-fluid.horario > .span12 > span` |
-| `executarFluxo` | 1079 | `async () → void` | Extrai protocolo, URL, nome, data; tenta autoextração de celular/e-mail da `.media-body`; preenche info-block no DOM; ativa botão Copiar |
-| `mostrarErroValidacao` | 1142 | `(campoId, mensagem) → void` | Insere `.cred-alert-erro` no `.cred-form-section` do campo e rola o modal até ele |
-| `getCategoriaLabel` | 1158 | `(grupo: Element) → string` | Retorna rótulo legível da categoria: categoria I → lê `label.cred-section-label`; demais → primeira `<td>` da linha externa da tabela |
-| `mostrarErroBotoes` | 1175 | `(primeiroGrupo, mensagem) → void` | Insere `.cred-alert-erro` próximo ao primeiro grupo pendente e rola até ele |
-| `validarFormulario` | 1193 | `() → boolean` | Valida sequencialmente: nome confirmado (checkbox), CPF 11 dígitos, ≥1 função, ≥1 região, e-mail válido (se preenchido), todos os Sim/Não respondidos |
-| `copiarEFechar` | 1688 | `async () → void` | Se `concluido`: apenas copia e abre planilha. Senão: valida, aplica marcadores Habilitado/Inabilitado + Conferido, seta `concluido=true`, salva progresso, abre planilha e navega ao inbox |
-| `removerMarcadoresCredenciamento` | 1793 | `() → void` | Remove do select2 todos os marcadores das credenciadoras (`EQUIPE`) e de status (Habilitado, Inabilitado, Conferido). Chamado pelo botão "Descartar" do toast. |
-| `aplicarMarcadorResultado` | 1822 | `(nome: string) → void` | Adiciona marcador pelo nome exato. Habilitado ↔ Inabilitado se remove mutuamente. Conferido é só acrescido. |
-| `ativarModoCongelado` | 1297 | `() → void` | Seta `concluido=true`, desabilita inputs/botões do formulário, troca botão para "Copiar" e injeta `#cred-btn-editar` amarelo |
-| `desativarModoCongelado` | 1332 | `() → void` | Seta `concluido=false`, re-habilita campos, remove `#cred-btn-editar`, restaura "Concluir e copiar", chama `atualizarBotaoConcluir` e `salvarProgresso` |
-| `copiarParaPlanilha` | 1261 | `async () → void` | Monta 38 colunas (A–AL); escreve `text/plain` e `text/html` (protocolo como hyperlink) via `navigator.clipboard.write`. Última coluna (AL) contém `cicloAtual`. |
-| `aplicarMarcadorCiclo` | 2092 | `(dataEnvio: string) → void` | Calcula o ciclo com base em `dataEnvio` ("DD/MM/YYYY HH:MM"); aplica o marcador `— 01`–`— 10` no select2 via script inline; só age se o marcador correto ainda não estiver selecionado; atualiza `cicloAtual`. |
-| `trocarMarcador` | 1318 | `(novoNome: string) → void` | Injeta `<script>` inline para alterar `#marcadores_ids` via jQuery do 1Doc: remove marcadores das outras credenciadoras, adiciona o da ativa |
+| Função | Descrição |
+|---|---|
+| `isPaginaProtocolo` | `location.href.includes('pg=doc/ver')` |
+| `extrairNomeCandidato` | Extrai nome de `span.pp`: prioriza atributo `data-content`; fallback: clone sem `<img>`; último fallback: mensagem manual |
+| `extrairDataEnvio` | Extrai data/hora de `.well.well-header .row-fluid.horario > .span12 > span` |
+| `executarFluxo` | Extrai protocolo, URL, nome, data; tenta autoextração de celular/e-mail da `.media-body`; preenche info-block no DOM; ativa botão Copiar |
+| `mostrarErroValidacao` | Insere `.cred-alert-erro` no `.cred-form-section` do campo e rola o modal até ele |
+| `getCategoriaLabel` | Retorna rótulo legível da categoria: categoria I → lê `label.cred-section-label`; demais → primeira `<td>` da linha externa da tabela |
+| `mostrarErroBotoes` | Insere `.cred-alert-erro` próximo ao primeiro grupo pendente e rola até ele |
+| `validarFormulario` | Valida sequencialmente: nome confirmado (checkbox), CPF 11 dígitos, ≥1 função, ≥1 região, e-mail válido (se preenchido), todos os Sim/Não respondidos |
+| `copiarEFechar` | Se `concluido`: apenas copia e abre planilha. Senão: valida, aplica marcadores Habilitado/Inabilitado + Conferido, seta `concluido=true`, salva progresso, abre planilha e navega ao inbox |
+| `removerMarcadoresCredenciamento` | Remove do select2 todos os marcadores das credenciadoras (`EQUIPE`) e de status (Habilitado, Inabilitado, Conferido). Chamado pelo botão "Descartar" do toast. |
+| `aplicarMarcadorResultado` | Adiciona marcador pelo nome exato. Habilitado ↔ Inabilitado se remove mutuamente. Conferido é só acrescido. |
+| `ativarModoCongelado` | Seta `concluido=true`, desabilita inputs/botões do formulário, troca botão para "Copiar" e injeta `#cred-btn-editar` amarelo |
+| `desativarModoCongelado` | Seta `concluido=false`, re-habilita campos, remove `#cred-btn-editar`, restaura "Concluir e copiar", chama `atualizarBotaoConcluir` e `salvarProgresso` |
+| `copiarParaPlanilha` | Monta 38 colunas (A–AL); escreve `text/plain` e `text/html` (protocolo como hyperlink) via `navigator.clipboard.write`. Última coluna (AL) contém `cicloAtual`. |
+| `aplicarMarcadorCiclo` | Calcula o ciclo com base em `dataEnvio` ("DD/MM/YYYY HH:MM"); aplica o marcador `— 01`–`— 10` no select2 via script inline; só age se o marcador correto ainda não estiver selecionado; atualiza `cicloAtual`. Usa `CICLOS` do escopo de módulo. |
+| `trocarMarcador` | Injeta `<script>` inline para alterar `#marcadores_ids` via jQuery do 1Doc: remove marcadores das outras credenciadoras, adiciona o da ativa |
 
 ### Seção 5 — Injeção do Botão na UI
 
-| Função | Linha | Assinatura | Descrição |
-|---|---|---|---|
-| `injetarBotao` | 1362 | `() → void` | Insere `#btn-credenciamento` em `.btn-group-tags` apenas em páginas de protocolo; vincula click a `abrirDialog` |
+| Função | Descrição |
+|---|---|
+| `injetarBotao` | Insere `#btn-credenciamento` em `.btn-group-tags` apenas em páginas de protocolo; vincula click a `abrirDialog` |
 
 ### Seção 6 — Observação e Inicialização (não-funções)
 
-| Elemento | Linha | Descrição |
-|---|---|---|
-| `observerUI` (MutationObserver) | 1383 | Observa mudanças em `document.body` para chamar `injetarBotao` quando o DOM for atualizado |
-| `setInterval` 500ms | 1388 | Detecta troca de URL (SPA); limpa todos os elementos injetados e flags; dispara `abrirDialog` automático se `autoAbrir` estiver ativo |
+| Elemento | Descrição |
+|---|---|
+| `observerUI` (MutationObserver) | Observa mudanças em `document.body` para chamar `injetarBotao` quando o DOM for atualizado |
+| `setInterval` 500ms | Detecta troca de URL (SPA); limpa todos os elementos injetados e flags; dispara `abrirDialog` automático se `autoAbrir` estiver ativo |
 
 ---
 
@@ -122,6 +122,7 @@
 | `cred-form-container` | `criarFormulario` | Container com todos os campos do candidato |
 | `cred-ficha-inscricao` | `moverFichaInscricao` | Bloco destacado com a Ficha de Inscrição |
 | `cred-outros-anexos` | `injetarOutrosAnexos` | Linha na tabela com anexos avulsos de despachos |
+| `cred-btn-duvida` | `injetarControlesNoModal` | Botão "Dúvida" (vermelho) no footer; visível apenas enquanto `_estaCompleto()` é falso |
 | `cred-btn-executar` | `injetarControlesNoModal` | Botão "Copiar"/"Processando..." no footer do modal |
 | `cred-chip-habilitacao` | `injetarControlesNoModal` | Chip de status (Em avaliação / Habilitado / Inabilitado) |
 | `cred-cpf` | `criarFormulario` | Input CPF (máscara `000.000.000-00`) |
@@ -208,3 +209,32 @@ observerUI (MutationObserver)
 | Q–U | Regiões 1–5 (número da região ou vazio) |
 | V–AF | Documentos I–XI (`sim` / `não` / vazio) |
 | AG | Resultado: `habilitado` ou `inabilitado` |
+
+---
+
+## 6. Índice — `inbox.user.js`
+
+### Variáveis e Constantes
+
+| Variável | Tipo | Descrição |
+|---|---|---|
+| `CICLOS` | `object[]` | Períodos de recebimento de inscrições (`{ num, inicio, fim }`). Idêntico ao de `credenciamento.user.js`. |
+| `CICLOS_ANALISE` | `object[]` | Períodos de análise dos documentos de habilitação (`{ num, inicio, fim }`). |
+| `protocoloWin` | `Window\|null` | Referência à janela de protocolo aberta via `window.open`. |
+| `dividirTela` | `boolean` | Abre protocolo em janela posicionada na metade esquerda. Persiste em `localStorage` (`1doc_cred_dividir`). |
+| `filtroCredenciadoras` | `boolean` | Oculta linhas com badge de credenciadora. Persiste em `localStorage`. |
+| `filtroCiclo` | `string` | Ciclo selecionado para filtragem (`''` = todos). Persiste em `localStorage`. |
+
+### Funções
+
+| Função | Descrição |
+|---|---|
+| `textoDosBadges` | Extrai texto dos badges da linha ignorando filhos `<i>` (ícones). |
+| `aplicarFiltros` | Oculta/exibe linhas conforme filtros de credenciadora e ciclo. |
+| `renderizarPainelInbox` | Popula o body do `#modal-cred-inbox` com os controles de configuração. |
+| `criarModal` | Cria o `#modal-cred-inbox` no `document.body` uma única vez. |
+| `verificarCicloProtocolo` | Cruza `CICLOS_ANALISE` (ciclo de análise atual) com `CICLOS` (ciclo da data do protocolo). Retorna objeto quando divergem; `null` caso contrário. |
+| `mostrarDialogCicloErrado` | Exibe `#modal-cred-ciclo-errado` (Bootstrap 2, `data-backdrop="static"`). Header vermelho. Footer: "Cancelar" (fecha) e "Abrir mesmo assim" (fecha + `onContinuar()`). |
+| `injetarBotao` | Injeta botão "Credenciamento" em `div.span7` do inbox. Guard: `data-cred-inbox-injetado`. |
+| `abrirProtocolo` | Abre o protocolo: navega no tab atual (se `dividirTela=false`) ou em janela posicionada na metade esquerda. |
+| `processarLinhas` | Registra listener de clique em cada linha nova. Antes de abrir, chama `verificarCicloProtocolo` e exibe dialog de aviso se necessário. |

@@ -9,7 +9,7 @@
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js`
-**Versão atual:** `0.3.0`
+**Versão atual:** `0.4.0`
 
 > **Versionamento:** este campo reflete o que está publicado (branch `main`). Alterado somente mediante instrução explícita do usuário — nunca por iniciativa do agente de IA.
 
@@ -250,8 +250,6 @@ Ao clicar em "Concluir e copiar" após validação bem-sucedida, o script execut
 * **Performance:** A injeção e extração não travam a interface principal do usuário (UI Thread). O uso de `setTimeout` é necessário para dar tempo de o DOM do 1Doc ser completamente renderizado antes da extração. O AJAX do modal nativo é monitorado via `setInterval(100ms)` com timeout de segurança.
 * **Sem modal custom:** O script não cria elementos de overlay ou modal próprios. Toda a UI é injetada dentro do modal nativo `#modal_aprovacao_anexos`.
 
----
-
 ## 5. Seletores DOM Específicos
 
 | Seletor | Uso |
@@ -294,29 +292,88 @@ Com isso, tanto a janela do protocolo (`inbox.user.js`) quanto a janela de anexo
 
 1. **Guarda de página:** executa apenas na URL que contém `pg=painel/listar`. Retorna imediatamente em qualquer outra página.
 2. **Botão no inbox:** injetado como primeiro filho de `div.span7` (barra de controles do inbox, que também contém paginação, "Mostrar" e dropdown "Com marcador"). Guard: atributo `data-cred-inbox-injetado` no próprio `div.span7`. Ao clicar, abre o modal de controle via jQuery Bootstrap 2 (`jQuery('#modal-cred-inbox').modal('show')`, executado via `<script>` injetado).
-3. **Modal de controle** (`#modal-cred-inbox`): criado uma única vez no `document.body`. Header verde institucional (`#005400`). Contém três controles persistidos em `localStorage`:
+3. **Modal de controle** (`#modal-cred-inbox`): criado uma única vez no `document.body`. Header verde institucional (`#005400`). Contém dois controles persistidos em `localStorage`:
    - **Dividir tela ao abrir protocolo** (`1doc_cred_dividir`, padrão `true`): quando ativo, o protocolo abre em janela posicionada na metade esquerda; quando inativo, navega no próprio tab.
-   - **Ocultar protocolos com credenciadora atribuída** (`1doc_cred_filtro_credenciadoras`, padrão `false`): oculta linhas cujos badges de marcador contenham `Renata`, `Catarina` ou `Alessandra`.
-   - **Filtro de ciclo** (`1doc_cred_filtro_ciclo`, padrão vazio): `<select>` com opções "Mostrar todos os ciclos" + Ciclos 01–10. Quando selecionado, oculta linhas com badge de ciclo divergente; mantém visíveis linhas sem badge de ciclo (candidatos não iniciados).
-4. **`aplicarFiltros()`:** percorre todas as `tr[id^="linha_"]` do DOM e aplica os dois filtros simultaneamente. Chamada na inicialização (após restaurar o `localStorage`), ao alterar qualquer controle do painel e a cada mutação do DOM (paginação dinâmica do inbox).
+   - **Exibir chip de ciclo nas linhas** (`1doc_cred_chip_ciclo`, padrão `true`): quando desativado, oculta todos os chips `.cred-chip-ciclo` existentes no DOM via `atualizarVisibilidadeChips()`.
+4. **Chip visual de ciclo (`injetarChipCiclo`):** ao processar cada linha, o script chama `verificarCicloProtocolo` imediatamente. Se houver divergência de ciclo, injeta um badge colorido imediatamente antes do `<br>` no título do protocolo (dentro de `td[data-href]`). A cor do badge é indexada pelo número do ciclo do protocolo (array `CICLO_CORES`, 10 cores: Menta → Aqua). Texto do chip: `"Ciclo XX"`. Este chip não possui interatividade — é puramente visual.
 5. **Detecção de linhas:** um `MutationObserver` em `document.body` detecta novas linhas (`tr[id^="linha_"]`) inseridas via paginação. A chamada inicial `processarLinhas()` cobre linhas já presentes. Cada linha é marcada com `data-cred-inbox-ok` para evitar listeners duplicados.
-6. **Interceptação de cliques:** cada linha recebe um listener de clique. A URL de destino é extraída do atributo `data-href` da célula clicada via `e.target.closest('td[data-href]')`. Cliques em `td` sem `data-href` (checkbox, ZIP) são ignorados.
-7. **Gerenciamento da janela (dividir tela ativo):** se a janela `cred-protocolo` já existe e não foi fechada, navega para o novo protocolo dentro dela e coloca foco; caso contrário, abre uma nova janela posicionada na metade esquerda (`width=metade, left=screen.availLeft`).
+6. **Interceptação de cliques e verificação de ciclo:** cada linha recebe um listener de clique. A URL de destino é extraída do atributo `data-href` da célula clicada via `e.target.closest('td[data-href]')`. Cliques em `td` sem `data-href` (checkbox, ZIP) são ignorados. Antes de abrir o protocolo, o script extrai a data de `<small class="data">` dentro da `<tr>` e chama `verificarCicloProtocolo`. Se retornar mismatch, exibe `mostrarDialogCicloErrado` e aguarda a escolha do usuário.
+7. **Gerenciamento da janela (dividir tela ativo):** se a janela `cred-protocolo` já existe e não foi fechada, navega para o novo protocolo dentro dela e coloca foco; caso contrário, abre uma nova janela posicionada na metade esquerda (`width=metade, left=screen.availLeft`). A lógica de abertura é encapsulada em `abrirProtocolo(urlAbsoluta)`, reutilizada tanto no fluxo normal quanto no callback "Abrir mesmo assim" do dialog.
 
-### Extração de texto de badges
+### Chip Visual de Ciclo (`CICLO_CORES` + `injetarChipCiclo`)
 
-O texto dos badges é extraído ignorando o conteúdo do `<i>` (ícone): apenas nós de texto diretos do `<span>` são concatenados (`childNodes` com `nodeType === 3`). Isso evita que o nome do ícone (`icon-tags`) vaze para a comparação.
+Quando há divergência entre o ciclo do protocolo e o ciclo de análise em curso, um badge colorido é injetado imediatamente antes do `<br>` no título da linha do inbox (dentro de `td[data-href]`). A cor é determinada pelo número do ciclo do **protocolo** (não do ciclo de análise):
 
-- **Badge de credenciadora:** comparação `CREDENCIADORAS.includes(t.toLowerCase())` (array `['renata', 'catarina', 'alessandra']`).
-- **Badge de ciclo:** detecção via regex `/Ciclo\/\d{2}/i`; captura do número com `/Ciclo\/(\d{2})/i` e comparação com o valor do `<select>`.
+| Ciclo | Cor | Nome |
+|---|---|---|
+| 01 | `#B5EAD7` | Menta |
+| 02 | `#C7CEEA` | Lavanda |
+| 03 | `#FFDAC1` | Pêssego |
+| 04 | `#FFB7B2` | Salmão |
+| 05 | `#E2F0CB` | Sálvia |
+| 06 | `#BFD7FF` | Céu |
+| 07 | `#F0E6FF` | Lilá |
+| 08 | `#FFF1BA` | Manteiga |
+| 09 | `#FFD6E0` | Blush |
+| 10 | `#C9F0FF` | Aqua |
+
+Texto do chip: `"Ciclo XX"` com texto preto (`#000000`). Fallback de cor: `#eeeeee`. O chip é puramente informativo — sem interatividade.
+
+### Verificação de Ciclo no Inbox (`verificarCicloProtocolo`)
+
+A lógica de cruzamento de ciclos reside inteiramente em `inbox.user.js`, disparada **antes de abrir** qualquer protocolo.
+
+**Tabela A — Recebimento de Inscrições (`CICLOS`)**
+
+| Ciclo | Início | Fim |
+|---|---|---|
+| 01 | 25/02/2026 | 11/03/2026 |
+| 02 | 12/03/2026 | 31/03/2026 |
+| 03 | 01/04/2026 | 30/04/2026 |
+| 04 | 01/05/2026 | 31/05/2026 |
+| 05 | 01/06/2026 | 30/06/2026 |
+| 06 | 01/07/2026 | 31/07/2026 |
+| 07 | 01/08/2026 | 31/08/2026 |
+| 08 | 01/09/2026 | 30/09/2026 |
+| 09 | 01/10/2026 | 31/10/2026 |
+| 10 | 01/11/2026 | 30/11/2026 |
+
+**Tabela B — Análise dos Documentos de Habilitação (`CICLOS_ANALISE`)**
+
+| Ciclo | Início análise | Fim análise |
+|---|---|---|
+| 01 | 12/03/2026 | 18/03/2026 |
+| 02 | 01/04/2026 | 10/04/2026 |
+| 03 | 04/05/2026 | 08/05/2026 |
+| 04 | 01/06/2026 | 10/06/2026 |
+| 05 | 01/07/2026 | 07/07/2026 |
+| 06 | 03/08/2026 | 10/08/2026 |
+| 07 | 01/09/2026 | 09/09/2026 |
+| 08 | 01/10/2026 | 09/10/2026 |
+| 09 | 02/11/2026 | 10/11/2026 |
+| 10 | 01/12/2026 | 08/12/2026 |
+
+**Algoritmo de `verificarCicloProtocolo(dataStr)`:**
+
+1. Obtém data atual (zerando horas), verifica em qual ciclo de **análise** (`CICLOS_ANALISE`) ela se enquadra. Se não → `null` (fora de período de análise, sem aviso).
+2. Parseia `dataStr` (ex: `"12/03/2026 14:49"`) e verifica em qual ciclo de **inscrição** (`CICLOS`) a data se enquadra. Se não → `null`.
+3. Se os ciclos forem **iguais** → `null` (fluxo normal).
+4. Se **diferentes** → `{ cicloProtocolo, cicloAnalise }`.
+
+**Dialog de Aviso (`mostrarDialogCicloErrado`):**
+
+Modal `#modal-cred-ciclo-errado` criado no `document.body` com `data-backdrop="static"` e `data-keyboard="false"`. Header vermelho (`#a94442`). Body exibe data, ciclo do protocolo e ciclo de análise atual. Footer:
+- **"Cancelar"** (`btn`): fecha o dialog e permanece no inbox.
+- **"Abrir mesmo assim"** (`btn-warning`): fecha o dialog e chama `abrirProtocolo(urlAbsoluta)`.
+
+| Chip visual de ciclo (`injetarChipCiclo`) agora recebe a classe `cred-chip-ciclo` e é criado com `display:none` se `mostrarChipCiclo === false`. `atualizarVisibilidadeChips()` percorre todos os `.cred-chip-ciclo` e alterna visibilidade em tempo real.
 
 ### Chaves de localStorage
 
 | Chave | Tipo | Padrão | Descrição |
 |---|---|---|---|
 | `1doc_cred_dividir` | `'true'`/`'false'` | `true` | Ativa/desativa a abertura em janela posicionada |
-| `1doc_cred_filtro_credenciadoras` | `'true'`/`'false'` | `false` | Ativa/desativa o filtro de credenciadoras |
-| `1doc_cred_filtro_ciclo` | `''`/`'01'`–`'10'` | `''` | Ciclo selecionado para filtragem (`''` = mostrar todos) |
+| `1doc_cred_chip_ciclo` | `'true'`/`'false'` | `true` | Ativa/desativa a visibilidade dos chips de ciclo |
 
 ### Seletores DOM específicos
 
@@ -325,4 +382,4 @@ O texto dos badges é extraído ignorando o conteúdo do `<i>` (ícone): apenas 
 | `div.span7` | Container da barra de controles do inbox. Alvo da injeção do botão (primeiro filho). |
 | `tr[id^="linha_"]` | Linha do inbox com ID no padrão `linha_XXXXXXX`. |
 | `td[data-href]` | Célula clicável da linha (protocolo). Contém a URL relativa do protocolo no atributo `data-href`. |
-| `span.badge` (dentro da `tr`) | Badges de marcadores do 1Doc. Texto extraído via `childNodes` de tipo texto (ignorando `<i>`). |
+| `small.data` (dentro da `tr`) | Data de envio do protocolo no inbox. Texto extraído para `verificarCicloProtocolo` e `injetarChipCiclo`. |

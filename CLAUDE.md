@@ -47,3 +47,29 @@ O versionamento/backup é feito pelo Git (branch `dev` → merge para `main` par
      1. Atualize `@version` no cabeçalho do script.
      2. Atualize `Versão atual` no PRD correspondente.
      3. No changelog: renomeie `## [Não publicado]` para `## [X.Y.Z] — AAAA-MM-DD` e crie um novo `## [Não publicado]` vazio acima.
+
+## Checklist de início de tarefa
+
+Antes de qualquer implementação:
+
+1. **Ler `documentacao_*.md`** do diretório relevante.
+2. **Consultar o PRD** (`*_prd.md`) se a tarefa envolver:
+   - Nova funcionalidade ou mudança de comportamento visível ao usuário.
+   - Dúvida sobre o que o sistema deve ou não deve fazer.
+   - *(Dispensável para: bug pontual e isolado, ajuste de texto/cor/layout especificado pelo usuário, refatoração sem impacto visível.)*
+3. **Para edições em `credenciamento.user.js`:**
+   - Ler `credenciamento_index.md` e identificar as funções/variáveis relevantes pelo nome.
+   - Buscar as funções no script via regex — não carregar o arquivo inteiro.
+   - Carregar o script inteiro apenas se precisar entender o fluxo completo.
+4. **Para injeções em novos pontos do DOM do 1Doc:**
+   - **Não abrir** `1Doc - processo.mhtml` diretamente — o arquivo tem ~20 MB e satura o contexto.
+   - Usar `grep_search` com o termo próximo ao ponto de injeção (ex: `btn-group-tags`, `modal_aprovacao_anexos`) para extrair apenas o trecho relevante do HTML.
+
+## Checklist de final de tarefa
+
+Antes de encerrar:
+
+1. **`changelog.md`** — registrar em `## [Não publicado]` toda mudança de função, UI, variável de estado ou comportamento. Pular se só houve mudança em documentação.
+2. **`credenciamento_index.md`** — atualizar se: função criada, renomeada ou removida; variável de estado adicionada ou removida; descrição de responsabilidade ficou desatualizada.
+3. **`credenciamento_prd.md`** — atualizar se: requisito funcional adicionado, alterado ou removido; campo do formulário ou coluna da planilha criado/removido; regra de validação mudou; novo seletor DOM relevante foi identificado.
+4. **`documentacao_1doc.md`** — atualizar se: nova técnica aplicada, limitação descoberta ou diretriz recebida do usuário que deve valer para tarefas futuras.
