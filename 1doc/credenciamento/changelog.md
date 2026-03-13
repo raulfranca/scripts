@@ -7,21 +7,40 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ---
 
+> **Regra de versionamento:** o número de versão representa o que está **publicado** (branch `main`). O progresso está em `## [Não publicado]` até o usuário disparar um lançamento. O agente de IA **nunca** altera `@version` nem promove `[Não publicado]` sem instrução explícita do usuário.
+
 ## [Não publicado]
 
-### Adicionado
+## [0.3.0] — 2026-03-13
 
-- **Script auxiliar `inbox.user.js`** (v0.1.0): intercepta cliques nas linhas do inbox (`pg=painel/listar`) e abre o protocolo em uma janela controlada pelo script (`window.open`) posicionada na metade esquerda da tela. Permite que o script principal (`credenciamento.user.js`) posicione a janela de anexos na metade direita, viabilizando divisão de tela automática no fluxo de credenciamento.
+### Adicionado — `inbox.user.js`
 
-### Alterado — `inbox.user.js` → v0.2.0
+- **Novo script** que intercepta cliques nas linhas do inbox (`pg=painel/listar`) e abre o protocolo em janela controlada posicionada na metade esquerda da tela.
+- **Botão "Credenciamento" no inbox:** injetado como primeiro filho de `div.span7`; abre o Painel de Controle via modal Bootstrap 2.
+- **Modal "Painel de Controle"** (`#modal-cred-inbox`): header verde institucional (`#005400`); criado uma única vez no `document.body`.
+- **Controle "Dividir tela ao abrir protocolo":** checkbox persistido em `localStorage` (`1doc_cred_dividir`, padrão `true`). Quando desmarcado, abre o protocolo no próprio tab.
+- **Filtro "Ocultar protocolos com credenciadora atribuída":** checkbox persistido em `localStorage` (`1doc_cred_filtro_credenciadoras`, padrão `false`). Oculta linhas do inbox com badge de Renata, Catarina ou Alessandra.
+- **Filtro de ciclo:** `<select>` persistido em `localStorage` (`1doc_cred_filtro_ciclo`). Oculta linhas com badge de ciclo diferente do selecionado; mantém visíveis linhas sem badge de ciclo.
+- **`aplicarFiltros()`:** aplica os dois filtros a todas as `tr[id^="linha_"]`; chamada na inicialização, ao alterar controles e a cada mutação do DOM.
 
-- **Botão "Credenciamento" no inbox:** injetado como primeiro filho de `div.span7` (barra de controles do inbox). Abre o Painel de Controle via modal Bootstrap 2.
-- **Modal "Painel de Controle"** (`#modal-cred-inbox`): criado uma única vez no `document.body`; header no verde institucional (`#005400`), idêntico ao padrão do script principal.
-- **Controle "Dividir tela ao abrir protocolo":** checkbox persistido em `localStorage` (`1doc_cred_dividir`, padrão `true`). Quando desmarcado, o protocolo abre no próprio tab do inbox em vez de numa janela posicionada.
-- **Filtro "Ocultar protocolos com credenciadora atribuída":** checkbox persistido em `localStorage` (`1doc_cred_filtro_credenciadoras`, padrão `false`). Oculta linhas do inbox que contenham badge com texto `Renata`, `Catarina` ou `Alessandra` (extraído via `childNodes` de texto, ignorando o `<i>` do ícone).
-- **Filtro de ciclo:** `<select>` persistido em `localStorage` (`1doc_cred_filtro_ciclo`, padrão vazio). Quando um ciclo está selecionado, oculta linhas com badge de ciclo diferente (padrão `Ciclo/NN`); mantém visíveis linhas sem badge de ciclo (candidatos não iniciados).
-- **`aplicarFiltros()`:** aplica os dois filtros simultaneamente a todas as `tr[id^="linha_"]` do DOM; chamada na inicialização, ao alterar qualquer controle e a cada mutação do DOM (paginação do inbox).
-- **`@grant` alterado** de `none` para `GM_addStyle`.
+### Alterado — `inbox.user.js`
+
+- **`@grant`** alterado de `none` para `GM_addStyle`.
+
+### Adicionado — `credenciamento.user.js`
+
+- **Marcador de credenciadora existente prevalece:** ao abrir o modal, se o protocolo já tiver marcador de credenciadora aplicado, ele é preservado e a UI é sincronizada. Só aplica novo marcador quando nenhum da equipe está presente. Nova função auxiliar `credenciadorJaAplicado`.
+- **Dialog de confirmação ao concluir com `autoMarcador` desativado:** ao clicar "Concluir e copiar" com o checkbox desmarcado, exibe dialog com 3 opções — **Aplicar marcadores** (aplica Credenciador, Ciclo, Habilitado/Inabilitado e Conferido), **Não aplicar** (conclui sem marcadores), **Voltar** (retorna ao modal). Nova função auxiliar `mostrarDialogMarcadores`.
+
+### Alterado — `credenciamento.user.js`
+
+- **Janela de anexos** (`cred-anexos`) posicionada na metade direita da tela (`width=metade, left=screen.availLeft+metade`).
+- **Marcador de ciclo** (`aplicarMarcadorCiclo`) agora respeita `autoMarcador`: com o checkbox desmarcado, nenhum marcador é aplicado na abertura do modal.
+
+### Corrigido — `credenciamento.user.js`
+
+- **PIS/PASEP/NIT/NIS:** campo tornado obrigatório (`validarFormulario` exige 11 dígitos; `_estaCompleto` atualiza o botão em tempo real) e persistido no `localStorage` (`salvarProgresso` salva, `restaurarProgresso` restaura com formatação correta).
+- **Botão "Revisar" nativo** ocultado via CSS global no `GM_addStyle` (`a.anexo_galeria_item_hover_btn { display: none !important }`), cobrindo todas as categorias independentemente do timing de AJAX.
 
 ## [0.2.1] — 2026-03-12
 
@@ -80,7 +99,8 @@ Versão inicial funcional do painel de conferência de credenciamento.
 - **Persistência de preferências** em `localStorage` entre sessões: credenciadora ativa, abertura automática e aplicação de marcador.
 - **Resiliência a SPA**: ao navegar entre protocolos sem recarregar a página, o script restaura o modal ao estado original e reseta o estado do candidato automaticamente.
 
-[Não publicado]: https://github.com/raulfranca/scripts/compare/main...dev
+[Não publicado]: https://github.com/raulfranca/scripts/compare/v0.3.0...dev
+[0.3.0]: https://github.com/raulfranca/scripts/compare/v0.2.1...v0.3.0
 [0.2.1]: https://github.com/raulfranca/scripts/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/raulfranca/scripts/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/raulfranca/scripts/releases/tag/v0.1.0

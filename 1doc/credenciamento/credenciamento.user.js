@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      0.2.1
+// @version      0.3.0
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -385,6 +385,30 @@
         }
         #cred-chip-habilitacao.cred-chip-inabilitado {
             background: #f2dede; color: #a94442; border: 1px solid #ebccd1;
+        }
+
+        /* Remover os botões "Revisar" nativos do modal — substituídos pelos botões Sim/Não */
+        #modal_aprovacao_anexos a.anexo_galeria_item_hover_btn { display: none !important; }
+
+        /* Dialog de confirmação de marcadores (exibido sobre o Bootstrap modal) */
+        #cred-dialog-marcadores {
+            position: fixed; inset: 0; z-index: 10050;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.45);
+        }
+        #cred-dialog-marcadores .cred-dialog-box {
+            background: #fff; border-radius: 6px;
+            padding: 20px 24px; max-width: 420px; width: 90%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+        }
+        #cred-dialog-marcadores .cred-dialog-title {
+            font-size: 15px; font-weight: 700; color: #8a6d3b; margin-bottom: 10px;
+        }
+        #cred-dialog-marcadores .cred-dialog-body {
+            font-size: 13px; color: #555; margin-bottom: 18px; line-height: 1.5;
+        }
+        #cred-dialog-marcadores .cred-dialog-footer {
+            display: flex; gap: 8px; justify-content: flex-end;
         }
 
 
@@ -950,10 +974,11 @@
                         return;
                     }
                 } catch (_) { /* referência inválida, criar nova janela */ }
-                const w = Math.round(screen.availWidth * 0.85);
-                const h = Math.round(screen.availHeight * 0.9);
+                const sw = screen.availWidth, sh = screen.availHeight;
+                const sl = screen.availLeft  ?? 0, st = screen.availTop ?? 0;
+                const metade = Math.floor(sw / 2);
                 _credAnexosWin = window.open(url, 'cred-anexos',
-                    'width=' + w + ',height=' + h + ',left=80,top=40');
+                    'width=' + metade + ',height=' + sh + ',left=' + (sl + metade) + ',top=' + st);
             };
         });
     }
@@ -1137,9 +1162,6 @@
     function adicionarColunaStatusNaTabela(innerTable, categoria) {
         if (!innerTable) return;
         if (innerTable.querySelector('.cred-simnao-cell')) return; // Já injetado
-
-        // Ocultar botões "Revisar" individuais
-        innerTable.querySelectorAll('a.anexo_galeria_item_hover_btn').forEach(a => { a.style.display = 'none'; });
 
         // Localizar o índice da coluna "Status da revisão" no cabeçalho
         const headerRow = innerTable.querySelector('thead > tr') || innerTable.querySelector('tr');
@@ -1440,6 +1462,7 @@
             bancoNome: bancoNome,
             bancoCOMPE: bancoCOMPE,
             chavePix: chavePix,
+            pis: pisDigitos,
             funcoes: funcoesSelecionadas.slice(),
             regioes: regioesSelecionadas.slice(),
             avaliacoesDocs: Object.assign({}, avaliacoesDocs),
@@ -1467,6 +1490,7 @@
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
         if (!bancoNome.trim()) return false;
         if (!(document.getElementById('cred-chavepix')?.value.trim())) return false;
+        if (pisDigitos.length !== 11) return false;
         if (funcoesSelecionadas.length === 0) return false;
         if (regioesSelecionadas.length === 0) return false;
         const modal = document.getElementById('modal_aprovacao_anexos');
@@ -1538,6 +1562,7 @@
         if (dados.bancoNome)      bancoNome = dados.bancoNome;
         if (dados.bancoCOMPE)     bancoCOMPE = dados.bancoCOMPE;
         if (dados.chavePix)       chavePix = dados.chavePix;
+        if (dados.pis)            pisDigitos = dados.pis;
         if (dados.funcoes && dados.funcoes.length)  funcoesSelecionadas = dados.funcoes.slice();
         if (dados.regioes && dados.regioes.length)  regioesSelecionadas = dados.regioes.slice();
         if (dados.avaliacoesDocs && Object.keys(dados.avaliacoesDocs).length) {
@@ -1580,6 +1605,15 @@
                 ? chavePix.slice(0,3)+'.'+chavePix.slice(3,6)+'.'+chavePix.slice(6,9)+'-'+chavePix.slice(9)
                 : chavePix;
             setVal('cred-chavepix', pixDisplay);
+        }
+        // PIS/PASEP formatado
+        if (pisDigitos) {
+            const pd = pisDigitos;
+            let pfmt = pd;
+            if (pd.length > 10)     pfmt = pd.slice(0,3)+'.'+pd.slice(3,8)+'.'+pd.slice(8,10)+'-'+pd.slice(10);
+            else if (pd.length > 8) pfmt = pd.slice(0,3)+'.'+pd.slice(3,8)+'.'+pd.slice(8);
+            else if (pd.length > 3) pfmt = pd.slice(0,3)+'.'+pd.slice(3,8);
+            setVal('cred-pis', pfmt);
         }
         if (dados.candidato) setVal('cred-nome-input', dados.candidato);
         const nomeConfEl = document.getElementById('cred-nome-confirmado');
@@ -1761,8 +1795,22 @@
             const candidato = extrairNomeCandidato();
             const dataEnvio = extrairDataEnvio();
 
-            if (autoMarcador) trocarMarcador(credenciadoraSalva);
-            aplicarMarcadorCiclo(dataEnvio);
+            if (autoMarcador) {
+                const membroExistente = credenciadorJaAplicado();
+                if (membroExistente) {
+                    // Marcador de credenciadora já aplicado: preservar e sincronizar UI
+                    if (membroExistente !== credenciadoraSalva) {
+                        credenciadoraSalva = membroExistente;
+                        localStorage.setItem('1doc_cred_nome', credenciadoraSalva);
+                        const modalEl = document.getElementById('modal_aprovacao_anexos');
+                        if (modalEl) modalEl.querySelectorAll('.cred-opt-btn').forEach(b =>
+                            b.classList.toggle('active', b.dataset.nome === credenciadoraSalva));
+                    }
+                } else {
+                    trocarMarcador(credenciadoraSalva);
+                }
+                aplicarMarcadorCiclo(dataEnvio);
+            }
 
             dadosExtraidos = { protocolo, url, candidato, dataEnvio };
 
@@ -1925,6 +1973,10 @@
             mostrarErroValidacao('cred-chavepix', 'Preencha a Chave Pix.');
             return false;
         }
+        if (pisDigitos.length !== 11) {
+            mostrarErroValidacao('cred-pis', 'Preencha o PIS/PASEP/NIT/NIS completo (11 dígitos).');
+            return false;
+        }
         if (funcoesSelecionadas.length === 0) {
             mostrarErroValidacao('cred-funcao-group', 'Selecione ao menos uma Função pretendida antes de continuar.');
             return false;
@@ -1945,6 +1997,53 @@
             return false;
         }
         return true;
+    }
+
+    /**
+     * Verifica se algum marcador de credenciadora (EQUIPE) já está aplicado no protocolo.
+     * Lê os <option selected> do #marcadores_ids. Retorna o nome do membro ou null.
+     */
+    function credenciadorJaAplicado() {
+        const sel = document.getElementById('marcadores_ids');
+        if (!sel) return null;
+        for (const opt of sel.options) {
+            if (!opt.selected) continue;
+            const texto = opt.text.toUpperCase();
+            for (const membro of EQUIPE) {
+                if (texto.includes(membro.toUpperCase())) return membro;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Exibe um dialog perguntando se os marcadores devem ser aplicados.
+     * Resolve com 'aplicar', 'nao-aplicar' ou 'voltar'.
+     */
+    function mostrarDialogMarcadores() {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            overlay.id = 'cred-dialog-marcadores';
+            overlay.innerHTML = `
+                <div class="cred-dialog-box">
+                    <div class="cred-dialog-title">&#9888; Marcadores automáticos desativados</div>
+                    <div class="cred-dialog-body">
+                        O checkbox <strong>"Aplicar marcador automaticamente"</strong> está desmarcado.<br><br>
+                        Deseja aplicar os marcadores <strong>Credenciador(a)</strong>, <strong>Ciclo</strong>, <strong>Habilitado/Inabilitado</strong> e <strong>Conferido</strong> no protocolo ao concluir?
+                    </div>
+                    <div class="cred-dialog-footer">
+                        <button class="btn btn-success" id="cred-dialog-aplicar">Aplicar marcadores</button>
+                        <button class="btn" id="cred-dialog-nao-aplicar">Não aplicar</button>
+                        <button class="btn btn-danger" id="cred-dialog-voltar">Voltar</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(overlay);
+            const fechar = (resultado) => { overlay.remove(); resolve(resultado); };
+            document.getElementById('cred-dialog-aplicar').addEventListener('click', () => fechar('aplicar'));
+            document.getElementById('cred-dialog-nao-aplicar').addEventListener('click', () => fechar('nao-aplicar'));
+            document.getElementById('cred-dialog-voltar').addEventListener('click', () => fechar('voltar'));
+        });
     }
 
     async function copiarEFechar() {
@@ -1974,18 +2073,32 @@
         document.querySelectorAll('.cred-alert-erro').forEach(el => el.remove());
         if (!validarFormulario()) return;
 
+        // Se marcadores automáticos estão desativados, perguntar ao usuário
+        let deveAplicarMarcadores = autoMarcador;
+        if (!autoMarcador) {
+            const escolha = await mostrarDialogMarcadores();
+            if (escolha === 'voltar') return;
+            deveAplicarMarcadores = (escolha === 'aplicar');
+        }
+
         btnExecutar.disabled = true;
 
         try {
-            // 1. Aplicar marcador Habilitado ou Inabilitado
+            // 1. Aplicar marcadores de credenciadora, ciclo, resultado e conferido
             const algumNao = Object.values(avaliacoesDocs).includes(false);
-            aplicarMarcadorResultado(algumNao ? 'Inabilitado' : 'Habilitado');
+            if (deveAplicarMarcadores) {
+                trocarMarcador(credenciadoraSalva);
+                if (dadosExtraidos.dataEnvio) aplicarMarcadorCiclo(dadosExtraidos.dataEnvio);
+                aplicarMarcadorResultado(algumNao ? 'Inabilitado' : 'Habilitado');
+            }
 
             // 2. Copiar conteúdo para o clipboard
             await copiarParaPlanilha();
 
             // 3. Aplicar marcador Conferido
-            aplicarMarcadorResultado('Conferido');
+            if (deveAplicarMarcadores) {
+                aplicarMarcadorResultado('Conferido');
+            }
 
             // 4. Marcar como concluído e salvar progresso
             concluido = true;

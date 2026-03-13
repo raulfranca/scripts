@@ -25,6 +25,7 @@
 | `estadoCivil` | `string` | por candidato | Estado civil selecionado |
 | `celularDigitos` | `string` | por candidato | Apenas dígitos do celular (10–11 chars) |
 | `email` | `string` | por candidato | E-mail do candidato |
+| `pisDigitos` | `string` | por candidato | Apenas dígitos do PIS/PASEP/NIT/NIS (11 chars); máscara `000.00000.00-0` |
 | `cep` | `string` | por candidato | Apenas dígitos do CEP (8 chars) |
 | `logradouro` | `string` | por candidato | Autopreenchido pelo ViaCEP; editável |
 | `numero` | `string` | por candidato | Número do endereço (preenchimento manual) |
