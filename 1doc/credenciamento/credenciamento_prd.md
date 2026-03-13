@@ -243,3 +243,67 @@ Ao clicar em "Concluir e copiar" após validação bem-sucedida, o script execut
 | `.modal-header` (dentro do modal) | Header original do modal, oculto pelo script via classe `cred-header-original-hidden`. |
 | `.modal-footer .cancelar` | Botão nativo "Fechar" do modal, usado para fechar programaticamente. |
 | `td.index[data-id_anexo]` | Célula de anexo na página. Contém `data-id_anexo` (ID único) e `data-id_emissao` (ID do despacho). O script compara esses IDs com os do modal para encontrar anexos extras. |
+
+---
+
+## Script Auxiliar — `inbox.user.js`
+
+**Nome (`@name`):** 1Doc - Inbox (Credenciamento)
+**Domínio (`@match`):** `https://pindamonhangaba.1doc.com.br/*`
+**Permissões (`@grant`):** `GM_addStyle`
+**Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/inbox.user.js`
+**Versão atual:** `0.2.0`
+
+---
+
+### Propósito
+
+Permitir a **divisão de tela automática** no fluxo de credenciamento, com botão de acesso a um painel de controle diretamente no inbox.
+
+O navegador só permite redimensionar e reposicionar programaticamente janelas criadas via `window.open()`. A janela principal do 1Doc, aberta pelo usuário clicando normalmente em um link, é opaca ao script — não é possível mover ou redimensionar. Por isso, este script auxiliar intercepta os cliques nas linhas do inbox e redireciona a abertura para uma janela que o script controla.
+
+Com isso, tanto a janela do protocolo (`inbox.user.js`) quanto a janela de anexos (`credenciamento.user.js` via `window.open`) podem ser posicionadas lado a lado de forma automatizada.
+
+### Relação com o script principal
+
+| Script | Janela gerenciada | Posicionamento programático |
+|---|---|---|
+| `inbox.user.js` | Protocolo do 1Doc (metade esquerda da tela) | Sim — criada via `window.open` com `left=0` |
+| `credenciamento.user.js` | Janela de anexos/PDFs (metade direita da tela) | Sim — criada via `window.open` com `left=metade` |
+
+### Comportamento
+
+1. **Guarda de página:** executa apenas na URL que contém `pg=painel/listar`. Retorna imediatamente em qualquer outra página.
+2. **Botão no inbox:** injetado como primeiro filho de `div.span7` (barra de controles do inbox, que também contém paginação, "Mostrar" e dropdown "Com marcador"). Guard: atributo `data-cred-inbox-injetado` no próprio `div.span7`. Ao clicar, abre o modal de controle via jQuery Bootstrap 2 (`jQuery('#modal-cred-inbox').modal('show')`, executado via `<script>` injetado).
+3. **Modal de controle** (`#modal-cred-inbox`): criado uma única vez no `document.body`. Header verde institucional (`#005400`). Contém três controles persistidos em `localStorage`:
+   - **Dividir tela ao abrir protocolo** (`1doc_cred_dividir`, padrão `true`): quando ativo, o protocolo abre em janela posicionada na metade esquerda; quando inativo, navega no próprio tab.
+   - **Ocultar protocolos com credenciadora atribuída** (`1doc_cred_filtro_credenciadoras`, padrão `false`): oculta linhas cujos badges de marcador contenham `Renata`, `Catarina` ou `Alessandra`.
+   - **Filtro de ciclo** (`1doc_cred_filtro_ciclo`, padrão vazio): `<select>` com opções "Mostrar todos os ciclos" + Ciclos 01–10. Quando selecionado, oculta linhas com badge de ciclo divergente; mantém visíveis linhas sem badge de ciclo (candidatos não iniciados).
+4. **`aplicarFiltros()`:** percorre todas as `tr[id^="linha_"]` do DOM e aplica os dois filtros simultaneamente. Chamada na inicialização (após restaurar o `localStorage`), ao alterar qualquer controle do painel e a cada mutação do DOM (paginação dinâmica do inbox).
+5. **Detecção de linhas:** um `MutationObserver` em `document.body` detecta novas linhas (`tr[id^="linha_"]`) inseridas via paginação. A chamada inicial `processarLinhas()` cobre linhas já presentes. Cada linha é marcada com `data-cred-inbox-ok` para evitar listeners duplicados.
+6. **Interceptação de cliques:** cada linha recebe um listener de clique. A URL de destino é extraída do atributo `data-href` da célula clicada via `e.target.closest('td[data-href]')`. Cliques em `td` sem `data-href` (checkbox, ZIP) são ignorados.
+7. **Gerenciamento da janela (dividir tela ativo):** se a janela `cred-protocolo` já existe e não foi fechada, navega para o novo protocolo dentro dela e coloca foco; caso contrário, abre uma nova janela posicionada na metade esquerda (`width=metade, left=screen.availLeft`).
+
+### Extração de texto de badges
+
+O texto dos badges é extraído ignorando o conteúdo do `<i>` (ícone): apenas nós de texto diretos do `<span>` são concatenados (`childNodes` com `nodeType === 3`). Isso evita que o nome do ícone (`icon-tags`) vaze para a comparação.
+
+- **Badge de credenciadora:** comparação `CREDENCIADORAS.includes(t.toLowerCase())` (array `['renata', 'catarina', 'alessandra']`).
+- **Badge de ciclo:** detecção via regex `/Ciclo\/\d{2}/i`; captura do número com `/Ciclo\/(\d{2})/i` e comparação com o valor do `<select>`.
+
+### Chaves de localStorage
+
+| Chave | Tipo | Padrão | Descrição |
+|---|---|---|---|
+| `1doc_cred_dividir` | `'true'`/`'false'` | `true` | Ativa/desativa a abertura em janela posicionada |
+| `1doc_cred_filtro_credenciadoras` | `'true'`/`'false'` | `false` | Ativa/desativa o filtro de credenciadoras |
+| `1doc_cred_filtro_ciclo` | `''`/`'01'`–`'10'` | `''` | Ciclo selecionado para filtragem (`''` = mostrar todos) |
+
+### Seletores DOM específicos
+
+| Seletor | Uso |
+|---|---|
+| `div.span7` | Container da barra de controles do inbox. Alvo da injeção do botão (primeiro filho). |
+| `tr[id^="linha_"]` | Linha do inbox com ID no padrão `linha_XXXXXXX`. |
+| `td[data-href]` | Célula clicável da linha (protocolo). Contém a URL relativa do protocolo no atributo `data-href`. |
+| `span.badge` (dentro da `tr`) | Badges de marcadores do 1Doc. Texto extraído via `childNodes` de tipo texto (ignorando `<i>`). |

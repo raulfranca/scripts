@@ -45,6 +45,15 @@ O 1Doc possui uma estrutura DOM complexa e, por vezes, poluída. Abaixo estão o
 * **`#painel_setor`** ou verificação de URL `pg=doc/ver`: Indica que o usuário está visualizando a página de um documento/protocolo específico.
 * **Botão Voltar:** `.icon-chevron-left` (Geralmente contido em um `<a>` ou `<button>`).
 
+### Página do Inbox (`pg=painel/listar`)
+
+* **Linhas da tabela:** `tr[id^="linha_"]` — cada linha corresponde a um protocolo no inbox. O ID segue o padrão `linha_XXXXXXX`.
+* **Célula clicável (protocolo):** `td[data-href]` — contém a URL relativa do protocolo no atributo `data-href` (ex: `./?pg=doc/ver&hash=...`). Células sem esse atributo (checkbox, link ZIP) devem ser ignoradas.
+* **Resolução de URL relativa:** `new URL(td.dataset.href, location.origin).href` — converte o `data-href` relativo para URL absoluta de forma segura.
+* **Interceptação de cliques:** Use `e.target.closest('td[data-href]')` no listener da `<tr>` para identificar se o clique ocorreu em uma célula de protocolo; caso retorne `null`, ignore o evento. Combine com `e.preventDefault()` e `e.stopPropagation()` para suprimir a navegação padrão.
+* **MutationObserver para carregamento incremental:** O inbox pode carregar mais linhas via scroll (paginação). Use `MutationObserver` em `document.body` com `{ childList: true, subtree: true }` e marque cada linha processada (ex: `dataset.credInboxOk = '1'`) para evitar listeners duplicados. Neste contexto, o `MutationObserver` é preferível ao `setInterval` porque as linhas chegam em lote via DOM insertion, não por alteração de conteúdo de elementos existentes.
+* **Janela controlada (divisão de tela):** Protocolos devem ser abertos via `window.open('cred-protocolo', ...)` em vez de deixar o browser navegar diretamente. Isso permite posicionar e redimensionar a janela programaticamente (o browser não permite controlar janelas abertas diretamente pelo usuário). Reutilize uma referência `let protocoloWin` no escopo da IIFE — se a janela ainda está aberta, redirecione com `protocoloWin.location.href`; caso contrário, recrie com `window.open`.
+
 ### Extração de Dados do Documento
 
 * **Número do Protocolo:** `.nd_num` (Geralmente contém texto como "15.932/2026"). Use `.innerText.trim()`.

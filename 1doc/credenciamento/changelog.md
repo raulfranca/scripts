@@ -9,6 +9,20 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+### Adicionado
+
+- **Script auxiliar `inbox.user.js`** (v0.1.0): intercepta cliques nas linhas do inbox (`pg=painel/listar`) e abre o protocolo em uma janela controlada pelo script (`window.open`) posicionada na metade esquerda da tela. Permite que o script principal (`credenciamento.user.js`) posicione a janela de anexos na metade direita, viabilizando divisão de tela automática no fluxo de credenciamento.
+
+### Alterado — `inbox.user.js` → v0.2.0
+
+- **Botão "Credenciamento" no inbox:** injetado como primeiro filho de `div.span7` (barra de controles do inbox). Abre o Painel de Controle via modal Bootstrap 2.
+- **Modal "Painel de Controle"** (`#modal-cred-inbox`): criado uma única vez no `document.body`; header no verde institucional (`#005400`), idêntico ao padrão do script principal.
+- **Controle "Dividir tela ao abrir protocolo":** checkbox persistido em `localStorage` (`1doc_cred_dividir`, padrão `true`). Quando desmarcado, o protocolo abre no próprio tab do inbox em vez de numa janela posicionada.
+- **Filtro "Ocultar protocolos com credenciadora atribuída":** checkbox persistido em `localStorage` (`1doc_cred_filtro_credenciadoras`, padrão `false`). Oculta linhas do inbox que contenham badge com texto `Renata`, `Catarina` ou `Alessandra` (extraído via `childNodes` de texto, ignorando o `<i>` do ícone).
+- **Filtro de ciclo:** `<select>` persistido em `localStorage` (`1doc_cred_filtro_ciclo`, padrão vazio). Quando um ciclo está selecionado, oculta linhas com badge de ciclo diferente (padrão `Ciclo/NN`); mantém visíveis linhas sem badge de ciclo (candidatos não iniciados).
+- **`aplicarFiltros()`:** aplica os dois filtros simultaneamente a todas as `tr[id^="linha_"]` do DOM; chamada na inicialização, ao alterar qualquer controle e a cada mutação do DOM (paginação do inbox).
+- **`@grant` alterado** de `none` para `GM_addStyle`.
+
 ## [0.2.1] — 2026-03-12
 
 ### Adicionado
