@@ -9,7 +9,7 @@
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js`
-**Versão atual:** `0.4.0`
+**Versão atual:** `0.5.0`
 
 > **Versionamento:** este campo reflete o que está publicado (branch `main`). Alterado somente mediante instrução explícita do usuário — nunca por iniciativa do agente de IA.
 
@@ -222,17 +222,42 @@ Regras de transformação:
 * **Documentos:** Valores minúsculos (`sim`/`não`) conforme validação de dados da planilha.
 * **Resultado:** Minúsculo, sem acento.
 
-### 3.6. Fluxo de Conclusão ("Concluir e copiar")
+### 3.6. Fluxo de Conclusão ("Concluir")
 
-Ao clicar em "Concluir e copiar" após validação bem-sucedida, o script executa sequencialmente:
+O fluxo de conclusão divide-se em duas fases separadas por uma ação do usuário.
 
-1. **Aplica marcador de resultado:** se algum documento foi marcado Não em `avaliacoesDocs`, aplica o marcador **"Inabilitado"** no protocolo; caso contrário, aplica **"Habilitado"**. O marcador oposto (Habilitado ↔ Inabilitado) é removido se estiver aplicado.
-2. **Copia para o clipboard:** monta as 40 colunas (A–AN) e chama `navigator.clipboard.write` com `text/html` e `text/plain`.
-3. **Aplica marcador "Conferido":** acrescenta o marcador "Conferido" ao protocolo (sem remover outros).
-4. **Mantém progresso:** o progresso no `localStorage` **não é apagado**, ficando disponível para consulta futura.
-5. **Navega para o inbox:** chama `window.history.back()` para retornar à página anterior (inbox do 1Doc).
+#### Fase 1 — ao clicar em "Concluir"
 
-> A aplicação dos marcadores usa a função `aplicarMarcadorResultado(nome)`, análoga a `trocarMarcador` mas sem remover marcadores de outros membros da equipe.
+Após validação bem-sucedida, o script:
+
+1. **Aplica marcador de resultado:** se algum documento foi marcado Não em `avaliacoesDocs`, aplica o marcador **"Inabilitado"**; caso contrário, aplica **"Habilitado"**. O marcador oposto é removido.
+2. **Aplica marcador de credenciadora e ciclo:** usando `trocarMarcador` e `aplicarMarcadorCiclo`.
+3. **Marca como concluído e salva o progresso** (inclui flag `_deveAplicarMarcadoresResposta` para a Fase 2).
+4. **Fecha o modal** de credenciamento.
+5. **Clica automaticamente no botão nativo "Responder"** (`button.botao_flutuante_0.bf_v_1.btn-info[rel="1"]`).
+6. **Aguarda o editor TinyMCE** carregar e clica no botão **"Inserir modelos"** (`#mceu_11-open`).
+7. **Seleciona o modelo** `[CRED-CHP014] Insc. recebida` no dropdown do TinyMCE (busca por `.mce-text` contendo `[CRED-CHP014]`).
+8. **Abre o Select2 de destinatários** (`#s2id_id_setor_responde .select2-choice`) e seleciona automaticamente a opção cujo texto contenha o e-mail do candidato (variável `email`).
+9. **Exibe um dialog** de aviso: *"Antes de enviar a resposta padrão, verifique se o(a) candidato(a) fez mais alguma pergunta no protocolo."*
+
+Em seguida, `aguardandoEnvioResposta` é definido como `true`. O usuário fica livre para navegar pelo protocolo e verificar as mensagens.
+
+> **Nota:** neste ponto, os marcadores de credenciadora, ciclo, habilitado/inabilitado já foram aplicados. O marcador "Conferido" ainda não.
+
+#### Fase 2 — ao clicar no botão nativo "Responder" (submit)
+
+Um listener em `document.body` (capture phase) intercepta o clique em `#enviar_documento` enquanto `aguardandoEnvioResposta` for `true`:
+
+1. **Aguarda o dialog de confirmação nativo** (`#sim`) aparecer (polling, timeout 8s).
+2. **Aplica marcador "Conferido"** (se `_deveAplicarMarcadoresResposta`).
+3. **Copia os dados do candidato** para o clipboard (HTML + TSV, 40 colunas).
+4. **Clica em `#sim`** para confirmar o envio da resposta.
+5. **Arquiva o protocolo automaticamente:** aguarda 1,5s (para o 1Doc processar o envio), clica no botão nativo "Arquivar" (`button.botao_flutuante_3.bf_v_3[title="Arquivar"]`) e confirma o dialog `#sim`. Se o botão não for encontrado, registra `console.warn` e continua.
+6. **Abre/alterna para a aba da planilha** (`window.open(PLANILHA_URL, 'cred-planilha')`).
+
+> O progresso no `localStorage` **não é apagado** após a cópia.\n>
+>
+> A aplicação dos marcadores usa `aplicarMarcadorResultado(nome)`, análoga a `trocarMarcador` mas sem remover marcadores de outros membros da equipe.
 
 ---
 

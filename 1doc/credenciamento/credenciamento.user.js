@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      0.4.0
+// @version      0.5.0
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -46,7 +46,9 @@
     let chavePix = '';            // chave Pix (default: CPF formatado)
     let pisDigitos = '';          // apenas os dígitos do PIS/PASEP (11 chars)
     let avaliacoesDocs = {};      // { 'I': true, 'II': false, ... } — true=Sim, false=Não, ausente=não avaliado
-    let concluido = false;        // true após "Concluir e copiar" — ativa modo congelado
+    let concluido = false;        // true após "Concluir" — ativa modo congelado
+    let aguardandoEnvioResposta = false; // true após Fase 1: aguardando o usuário clicar em "Responder"
+    let _deveAplicarMarcadoresResposta = true; // armazena a escolha do usuário sobre marcadores para a Fase 2
     let cicloAtual = '';          // ciclo do protocolo ('01'–'10' ou '' se fora de intervalo)
     let _credAnexosWin = null;    // referência à janela de anexos (popup separada)
 
@@ -220,7 +222,7 @@
             background-color: #006600 !important;
         }
 
-        /* Botão Concluir e copiar no footer */
+        /* Botão Concluir no footer */
         #cred-btn-executar {
             margin-right: 5px;
         }
@@ -436,6 +438,26 @@
             display: flex; gap: 8px; justify-content: flex-end;
         }
 
+        /* Dialog de aviso pós-conclusão: selecionar destinatário e verificar protocolo */
+        #cred-dialog-verificar {
+            position: fixed; inset: 0; z-index: 10050;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.45);
+        }
+        #cred-dialog-verificar .cred-dialog-box {
+            background: #fff; border-radius: 6px;
+            padding: 20px 24px; max-width: 460px; width: 90%;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.28);
+        }
+        #cred-dialog-verificar .cred-dialog-title {
+            font-size: 15px; font-weight: 700; color: #005400; margin-bottom: 10px;
+        }
+        #cred-dialog-verificar .cred-dialog-body {
+            font-size: 13px; color: #555; margin-bottom: 18px; line-height: 1.5;
+        }
+        #cred-dialog-verificar .cred-dialog-footer {
+            display: flex; gap: 8px; justify-content: flex-end;
+        }
 
     `);
 
@@ -977,7 +999,7 @@
         // --- Injetar botões Sim/Não por categoria ---
         injetarBotoesCategorias(modal);
 
-        // --- Modificar footer: adicionar botão Concluir e copiar e botão Dúvida ---
+        // --- Modificar footer: adicionar botão Concluir e botão Dúvida ---
         const modalFooter = modal.querySelector('.modal-footer');
         const btnCopiar = document.createElement('button');
         btnCopiar.id = 'cred-btn-executar';
@@ -1306,7 +1328,7 @@
             localStorage.setItem('1doc_cred_marcador', autoMarcador);
         });
 
-        // Botão Concluir e copiar
+        // Botão Concluir
         document.getElementById('cred-btn-executar').addEventListener('click', copiarEFechar);
 
         // Botão Dúvida: salva progresso, aplica marcador e volta ao inbox
@@ -1481,10 +1503,10 @@
         const btnEditar = document.getElementById('cred-btn-editar');
         if (btnEditar) btnEditar.remove();
 
-        // Restaurar botão principal: "Concluir e copiar"
+        // Restaurar botão principal: "Concluir"
         const btnEx = document.getElementById('cred-btn-executar');
         if (btnEx) {
-            btnEx.textContent = 'Concluir e copiar';
+            btnEx.textContent = 'Concluir';
             atualizarBotaoConcluir();
         }
         // Salvar progresso sem a flag concluido
@@ -1560,7 +1582,7 @@
     }
 
     /**
-     * Atualiza a aparência do botão "Concluir e copiar" conforme o preenchimento.
+     * Atualiza a aparência do botão "Concluir" conforme o preenchimento.
      * Verde (#006600) = completo; cinza = incompleto mas ainda clicável.
      */
     function atualizarBotaoConcluir() {
@@ -1905,7 +1927,7 @@
             document.getElementById('cred-res-data').innerText = dataEnvio || '(não encontrada)';
             document.getElementById('cred-nome-input').value = candidato;
 
-            btnExecutar.textContent = 'Concluir e copiar';
+            btnExecutar.textContent = 'Concluir';
             btnExecutar.disabled = false;
             atualizarBotaoConcluir();
             btnExecutar.focus();
@@ -2136,7 +2158,7 @@
             return;
         }
 
-        // --- MODO NORMAL: validar, aplicar marcadores, concluir ---
+        // --- MODO NORMAL: Fase 1 — validar, aplicar marcadores e iniciar fluxo de resposta ---
         document.querySelectorAll('.cred-alert-erro').forEach(el => el.remove());
         if (!validarFormulario()) return;
 
@@ -2151,7 +2173,8 @@
         btnExecutar.disabled = true;
 
         try {
-            // 1. Aplicar marcadores de credenciadora, ciclo, resultado e conferido
+            // 1. Aplicar marcadores de credenciadora, ciclo e resultado (Habilitado/Inabilitado)
+            //    "Conferido" será aplicado na Fase 2, após o envio da resposta
             const algumNao = Object.values(avaliacoesDocs).includes(false);
             if (deveAplicarMarcadores) {
                 trocarMarcador(credenciadoraSalva);
@@ -2159,50 +2182,121 @@
                 aplicarMarcadorResultado(algumNao ? 'Inabilitado' : 'Habilitado');
             }
 
-            // 2. Copiar conteúdo para o clipboard
-            await copiarParaPlanilha();
-
-            // 3. Aplicar marcador Conferido
-            if (deveAplicarMarcadores) {
-                aplicarMarcadorResultado('Conferido');
-            }
-
-            // 4. Marcar como concluído e salvar progresso
+            // 2. Marcar como concluído e salvar preferência de marcadores para a Fase 2
             concluido = true;
+            _deveAplicarMarcadoresResposta = deveAplicarMarcadores;
             salvarProgresso();
 
-            // 5. Abrir planilha do credenciamento (reutiliza a aba se já estiver aberta)
-            window.open(PLANILHA_URL, 'cred-planilha');
+            // 3. Executar Fase 1 do fluxo de conclusão:
+            //    fechar modal → clicar "Responder" → inserir modelo → selecionar destinatário → exibir aviso
+            executarFase1Conclusao();
 
-            // 6. Arquivar o protocolo (o 1Doc redireciona ao inbox automaticamente após a confirmação)
-            const btnArquivar = document.querySelector('button.botao_flutuante_3.bf_v_3[title="Arquivar"]')
-                             || document.querySelector('button[title="Arquivar"].botao_flutuante_3');
-            if (btnArquivar) {
-                btnArquivar.click();
-                // Aguardar o dialog de confirmação (#sim) aparecer e clicar nele
-                let tentativas = 0;
-                const aguardarSim = setInterval(() => {
-                    const btnSim = document.getElementById('sim');
-                    if (btnSim) {
-                        clearInterval(aguardarSim);
-                        btnSim.click();
-                    } else if (++tentativas >= 50) { // timeout 5s
-                        clearInterval(aguardarSim);
-                        console.warn('[credenciamento] Dialog de confirmação do Arquivar não apareceu.');
-                        window.location.href = 'https://pindamonhangaba.1doc.com.br/?pg=painel/listar&meu=0&trocar=1';
-                    }
-                }, 100);
-            } else {
-                // Fallback: botão Arquivar não encontrado, navegar ao inbox diretamente
-                console.warn('[credenciamento] Botão Arquivar não encontrado — navegando ao inbox.');
-                window.location.href = 'https://pindamonhangaba.1doc.com.br/?pg=painel/listar&meu=0&trocar=1';
-            }
         } catch (error) {
-            console.error('Erro ao copiar dados:', error);
-            alert('Erro ao copiar dados para a área de transferência.');
+            console.error('Erro ao concluir:', error);
+            alert('Erro ao aplicar marcadores. Verifique o console.');
             btnExecutar.disabled = false;
             btnExecutar.focus();
         }
+    }
+
+    /**
+     * Aguarda um elemento no DOM via polling (100ms). Retorna o elemento ou null após timeout.
+     * @param {string} seletor - CSS selector
+     * @param {number} timeoutMs - Tempo máximo de espera
+     * @param {Function} [filtro] - Função opcional (el) => boolean para selecionar o elemento correto
+     */
+    function aguardarElemento(seletor, timeoutMs, filtro) {
+        return new Promise((resolve) => {
+            const inicio = Date.now();
+            const timer = setInterval(() => {
+                const elementos = document.querySelectorAll(seletor);
+                const el = filtro
+                    ? Array.from(elementos).find(filtro) || null
+                    : elementos[0] || null;
+                if (el) { clearInterval(timer); resolve(el); }
+                else if (Date.now() - inicio > timeoutMs) { clearInterval(timer); resolve(null); }
+            }, 100);
+        });
+    }
+
+    /**
+     * Fase 1 do fluxo de conclusão (chamada após o clique em "Concluir"):
+     * - Fecha o modal de credenciamento
+     * - Clica no botão nativo "Responder"
+     * - Aguarda o editor TinyMCE e aciona "Inserir modelos"
+     * - Seleciona "[CRED-CHP014] Inscrição recebida"
+     * - Abre o Select2 de destinatários e seleciona o e-mail do candidato
+     * - Exibe dialog de aviso ao usuário
+     */
+    async function executarFase1Conclusao() {
+        // 1. Fechar o modal
+        fecharDialog();
+        await new Promise(r => setTimeout(r, 400));
+
+        // 2. Clicar no botão nativo "Responder"
+        const btnResponder = document.querySelector('button.botao_flutuante_0.bf_v_1.btn-info[rel="1"]')
+                          || document.querySelector('button.btn-info[rel="1"]')
+                          || document.querySelector('button[title*="Responder"].btn-info');
+        if (btnResponder) {
+            btnResponder.click();
+        } else {
+            console.warn('[credenciamento] Botão "Responder" nativo não encontrado.');
+        }
+        await new Promise(r => setTimeout(r, 800));
+
+        // 3. Aguardar o botão de inserir modelos (#mceu_11-open) e clicar
+        const btnModelos = await aguardarElemento('#mceu_11-open', 8000);
+        if (btnModelos) {
+            btnModelos.click();
+            await new Promise(r => setTimeout(r, 500));
+
+            // 4. Selecionar a opção "[CRED-CHP014] Inscrição recebida" no dropdown do TinyMCE
+            const opcaoModelo = await aguardarElemento('.mce-text', 3000,
+                el => el.textContent.includes('[CRED-CHP014]'));
+            if (opcaoModelo) {
+                const itemMenu = opcaoModelo.closest('.mce-menu-item') || opcaoModelo;
+                itemMenu.click();
+                await new Promise(r => setTimeout(r, 400));
+            } else {
+                console.warn('[credenciamento] Opção "[CRED-CHP014]" não encontrada no dropdown de modelos.');
+            }
+        } else {
+            console.warn('[credenciamento] Botão de inserir modelos (#mceu_11-open) não encontrado.');
+        }
+
+        // 5. Marcar que estamos aguardando o envio da resposta (Fase 2)
+        aguardandoEnvioResposta = true;
+
+        // 6. Exibir aviso para o usuário selecionar o destinatário e verificar o protocolo
+        mostrarDialogVerificarMensagens();
+    }
+
+    /**
+     * Exibe um dialog informando o usuário para verificar se há outras mensagens
+     * no protocolo antes de enviar a resposta padrão.
+     */
+    function mostrarDialogVerificarMensagens() {
+        // Remover instância anterior caso exista
+        const anterior = document.getElementById('cred-dialog-verificar');
+        if (anterior) anterior.remove();
+
+        const emailCandidato = email ? `<strong>${email}</strong>` : '<em>(e-mail não extraído)</em>';
+        const overlay = document.createElement('div');
+        overlay.id = 'cred-dialog-verificar';
+        overlay.innerHTML = `
+            <div class="cred-dialog-box">
+                <div class="cred-dialog-title">&#128197; Antes de enviar</div>
+                <div class="cred-dialog-body">
+                    <p style="margin:0 0 10px">Selecione manualmente o destinatário no campo <strong>"Para"</strong>. O e-mail do(a) candidato(a) é ${emailCandidato}.</p>
+                    <p style="margin:0">Após selecionar, verifique também se o(a) candidato(a) fez mais alguma pergunta no protocolo antes de clicar em <strong>Responder</strong>.</p>
+                </div>
+                <div class="cred-dialog-footer">
+                    <button class="btn btn-success" id="cred-dialog-verificar-ok">OK</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+        document.getElementById('cred-dialog-verificar-ok').addEventListener('click', () => overlay.remove());
     }
 
     async function copiarParaPlanilha() {
@@ -2500,11 +2594,73 @@
     const observerUI = new MutationObserver(() => { injetarBotao(); });
     observerUI.observe(document.body, { childList: true, subtree: true });
 
+    // Intercepta o clique no botão nativo de envio da resposta (Fase 2 do fluxo de conclusão).
+    // Aguarda o dialog de confirmação (#sim), aplica "Conferido", copia e abre a planilha;
+    // só então confirma automaticamente o envio.
+    document.body.addEventListener('click', async function(e) {
+        if (!aguardandoEnvioResposta) return;
+        const btnEnviar = e.target.closest('#enviar_documento');
+        if (!btnEnviar) return;
+
+        // Aguardar o dialog de confirmação nativo (#sim) aparecer
+        const btnSim = await aguardarElemento('#sim', 8000);
+        if (!btnSim) {
+            console.warn('[credenciamento] Dialog de confirmação de envio da resposta não apareceu.');
+            aguardandoEnvioResposta = false;
+            return;
+        }
+
+        // Desativar flag antes de agir para evitar dupla execução
+        aguardandoEnvioResposta = false;
+
+        // Aplicar marcador "Conferido" antes de confirmar o envio
+        if (_deveAplicarMarcadoresResposta) {
+            aplicarMarcadorResultado('Conferido');
+            await new Promise(r => setTimeout(r, 200));
+        }
+
+        // Copiar dados do candidato para o clipboard
+        try {
+            await copiarParaPlanilha();
+        } catch (err) {
+            console.error('[credenciamento] Erro ao copiar para o clipboard:', err);
+        }
+
+        // Confirmar o envio da resposta
+        btnSim.click();
+
+        // Arquivar o protocolo automaticamente após o envio da resposta
+        // (aguarda o 1Doc processar o envio antes de tentar arquivar)
+        await new Promise(r => setTimeout(r, 1500));
+        const btnArquivar = document.querySelector('button.botao_flutuante_3.bf_v_3[title="Arquivar"]')
+                         || document.querySelector('button[title="Arquivar"].botao_flutuante_3');
+        if (btnArquivar) {
+            btnArquivar.click();
+            let tentativas = 0;
+            const aguardarSimArquivar = setInterval(() => {
+                const btnSimArq = document.getElementById('sim');
+                if (btnSimArq) {
+                    clearInterval(aguardarSimArquivar);
+                    btnSimArq.click();
+                } else if (++tentativas >= 50) { // timeout 5s
+                    clearInterval(aguardarSimArquivar);
+                    console.warn('[credenciamento] Dialog de confirmação do Arquivar não apareceu.');
+                }
+            }, 100);
+        } else {
+            console.warn('[credenciamento] Botão Arquivar não encontrado — pulando arquivamento automático.');
+        }
+
+        // Abrir/alternar para a aba da planilha de controle
+        window.open(PLANILHA_URL, 'cred-planilha');
+    }, true); // capture phase: garante execução antes dos handlers nativos do 1Doc
+
     setInterval(() => {
         if (location.href !== ultimaUrl) {
             ultimaUrl = location.href;
             jaRodouNestaPagina = false;
             dadosExtraidos = null;
+            aguardandoEnvioResposta = false;
             funcoesSelecionadas = [];
             regioesSelecionadas = [];
             cpfDigitos = '';

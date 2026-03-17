@@ -35,7 +35,9 @@
 | `bancoCOMPE` | `string` | por candidato | Sempre vazio — campo de texto livre, sem lookup |
 | `chavePix` | `string` | por candidato | Chave Pix (default: CPF formatado; editável) |
 | `avaliacoesDocs` | `object` | por candidato | `{ 'I': true/false, 'II': true/false, ... }` — `true`=Sim, `false`=Não, ausente=pendente |
-| `concluido` | `boolean` | por candidato | `true` após clicar em "Concluir e copiar" com sucesso; persiste no `localStorage`. Ativa modo congelado ao restaurar progresso. |
+| `concluido` | `boolean` | por candidato | `true` após clicar em "Concluir" com sucesso; persiste no `localStorage`. Ativa modo congelado ao restaurar progresso. |
+| `aguardandoEnvioResposta` | `boolean` | por candidato / sessão | `true` entre a Fase 1 e a Fase 2 do fluxo de conclusão; resetado na navegação SPA. |
+| `_deveAplicarMarcadoresResposta` | `boolean` | por candidato | Armazena a escolha do usuário sobre marcadores (da Fase 1) para ser usada na Fase 2. |
 | `cicloAtual` | `string` | por candidato | Ciclo identificado pela data de envio (`'01'`–`'10'`, ou `''` se fora de intervalo). Atualizado por `aplicarMarcadorCiclo`; resetado em `resetarEstadoCandidato`. |
 | `CICLOS` | `object[]` | constante | Períodos de recebimento de inscrições por ciclo (`{ num, inicio, fim }`). Declarado no escopo de módulo (seção 1). |
 | `_salvarProgressoTimer` | `number\|null` | sessão | Timer ID do debounce de auto-save (300ms) |
@@ -90,11 +92,14 @@
 | `getCategoriaLabel` | Retorna rótulo legível da categoria: categoria I → lê `label.cred-section-label`; demais → primeira `<td>` da linha externa da tabela |
 | `mostrarErroBotoes` | Insere `.cred-alert-erro` próximo ao primeiro grupo pendente e rola até ele |
 | `validarFormulario` | Valida sequencialmente: nome confirmado (checkbox), CPF 11 dígitos, ≥1 função, ≥1 região, e-mail válido (se preenchido), todos os Sim/Não respondidos |
-| `copiarEFechar` | Se `concluido`: apenas copia e abre planilha. Senão: valida, aplica marcadores Habilitado/Inabilitado + Conferido, seta `concluido=true`, salva progresso, abre planilha e navega ao inbox |
+| `copiarEFechar` | **Fase 1:** valida, aplica marcadores credenciadora/ciclo/habilitado, seta `concluido=true`, salva progresso e chama `executarFase1Conclusao`. **Modo concluído:** apenas copia e abre planilha. |
+| `aguardarElemento` | Polling (100ms) que aguarda um elemento no DOM por seletor CSS + filtro opcional; resolve com o elemento ou `null` após timeout. |
+| `executarFase1Conclusao` | Orquestra o fluxo pós-modal: fecha dialog → clica "Responder" nativo → insere modelo TinyMCE → seleciona destinatário Select2 → seta `aguardandoEnvioResposta=true` → exibe dialog de aviso. |
+| `mostrarDialogVerificarMensagens` | Exibe overlay com aviso para o usuário conferir se há novas mensagens no protocolo antes de enviar a resposta padrão. |
 | `removerMarcadoresCredenciamento` | Remove do select2 todos os marcadores das credenciadoras (`EQUIPE`) e de status (Habilitado, Inabilitado, Conferido). Chamado pelo botão "Descartar" do toast. |
 | `aplicarMarcadorResultado` | Adiciona marcador pelo nome exato. Habilitado ↔ Inabilitado se remove mutuamente. Conferido é só acrescido. |
 | `ativarModoCongelado` | Seta `concluido=true`, desabilita inputs/botões do formulário, troca botão para "Copiar" e injeta `#cred-btn-editar` amarelo |
-| `desativarModoCongelado` | Seta `concluido=false`, re-habilita campos, remove `#cred-btn-editar`, restaura "Concluir e copiar", chama `atualizarBotaoConcluir` e `salvarProgresso` |
+| `desativarModoCongelado` | Seta `concluido=false`, re-habilita campos, remove `#cred-btn-editar`, restaura "Concluir", chama `atualizarBotaoConcluir` e `salvarProgresso` |
 | `copiarParaPlanilha` | Monta 38 colunas (A–AL); escreve `text/plain` e `text/html` (protocolo como hyperlink) via `navigator.clipboard.write`. Última coluna (AL) contém `cicloAtual`. |
 | `aplicarMarcadorCiclo` | Calcula o ciclo com base em `dataEnvio` ("DD/MM/YYYY HH:MM"); aplica o marcador `— 01`–`— 10` no select2 via script inline; só age se o marcador correto ainda não estiver selecionado; atualiza `cicloAtual`. Usa `CICLOS` do escopo de módulo. |
 | `trocarMarcador` | Injeta `<script>` inline para alterar `#marcadores_ids` via jQuery do 1Doc: remove marcadores das outras credenciadoras, adiciona o da ativa |

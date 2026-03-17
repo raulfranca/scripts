@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Inbox (Credenciamento)
 // @namespace    http://tampermonkey.net/
-// @version      0.4.0
+// @version      0.5.0
 // @description  Painel de controle e abertura de protocolos em janela controlada para divisão de tela no credenciamento.
 // @author       Raul Cabral
 // @match        https://pindamonhangaba.1doc.com.br/*

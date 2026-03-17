@@ -9,7 +9,18 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 > **Regra de versionamento:** o número de versão representa o que está **publicado** (branch `main`). O progresso está em `## [Não publicado]` até o usuário disparar um lançamento. O agente de IA **nunca** altera `@version` nem promove `[Não publicado]` sem instrução explícita do usuário.
 
-## [Não publicado]
+## [0.5.0] — 2026-03-17
+
+### Alterado — credenciamento
+
+- O botão "Concluir e copiar" foi renomeado para **"Concluir"**.
+- O fluxo de conclusão agora ocorre em duas etapas:
+  - **Primeira etapa (ao clicar em "Concluir"):** o modal se fecha e o script clica automaticamente no botão "Responder" do 1Doc. Em seguida, insere o modelo padrão de resposta `[CRED-CHP014] Inscrição recebida` no editor de texto e exibe um aviso ao credenciador para que ele:
+    - Selecione manualmente o destinatário (mostrando qual é o e-mail do candidato)
+    - Verifique se há outras mensagens do candidato no protocolo
+    
+    Nesta etapa, os marcadores de credenciadora, ciclo, habilitado/inabilitado já são aplicados automaticamente.
+  - **Segunda etapa (ao clicar no botão "Responder" para enviar):** o script automaticamente aplica o marcador "Conferido", copia os dados do candidato para a área de transferência, confirma o envio da resposta, arquiva o protocolo no 1Doc e abre/muda para a aba da planilha de controle.
 
 ## [0.4.0] — 2026-03-13
 
