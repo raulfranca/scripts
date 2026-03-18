@@ -9,7 +9,7 @@
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js`
-**Versão atual:** `0.5.0`
+**Versão atual:** `0.6.0`
 
 > **Versionamento:** este campo reflete o que está publicado (branch `main`). Alterado somente mediante instrução explícita do usuário — nunca por iniciativa do agente de IA.
 
@@ -294,7 +294,7 @@ Um listener em `document.body` (capture phase) intercepta o clique em `#enviar_d
 **Domínio (`@match`):** `https://pindamonhangaba.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/inbox.user.js`
-**Versão atual:** `0.2.0`
+**Versão atual:** `0.6.0`
 
 ---
 
@@ -324,6 +324,10 @@ Com isso, tanto a janela do protocolo (`inbox.user.js`) quanto a janela de anexo
 5. **Detecção de linhas:** um `MutationObserver` em `document.body` detecta novas linhas (`tr[id^="linha_"]`) inseridas via paginação. A chamada inicial `processarLinhas()` cobre linhas já presentes. Cada linha é marcada com `data-cred-inbox-ok` para evitar listeners duplicados.
 6. **Interceptação de cliques e verificação de ciclo:** cada linha recebe um listener de clique. A URL de destino é extraída do atributo `data-href` da célula clicada via `e.target.closest('td[data-href]')`. Cliques em `td` sem `data-href` (checkbox, ZIP) são ignorados. Antes de abrir o protocolo, o script extrai a data de `<small class="data">` dentro da `<tr>` e chama `verificarCicloProtocolo`. Se retornar mismatch, exibe `mostrarDialogCicloErrado` e aguarda a escolha do usuário.
 7. **Gerenciamento da janela (dividir tela ativo):** se a janela `cred-protocolo` já existe e não foi fechada, navega para o novo protocolo dentro dela e coloca foco; caso contrário, abre uma nova janela posicionada na metade esquerda (`width=metade, left=screen.availLeft`). A lógica de abertura é encapsulada em `abrirProtocolo(urlAbsoluta)`, reutilizada tanto no fluxo normal quanto no callback "Abrir mesmo assim" do dialog.
+8. **Auto-refresh por inatividade:** após 60 segundos sem interação do usuário (mouse, teclado, clique, scroll ou toque), a página é recarregada automaticamente para evitar listas desatualizadas. O comportamento varia conforme o estado da aba:
+   - **Aba em segundo plano (`document.hidden === true`):** `location.reload()` é chamado pelo `setInterval` (1s) ao atingir 60s, ou imediatamente pelo listener `visibilitychange` ao trazer a aba à frente caso o tempo já tenha sido ultrapassado.
+   - **Aba em primeiro plano (visível, sem interação):** exibe um toast fixo (`#cred-inbox-toast-refresh`) no canto inferior direito com a mensagem "Página inativa há Xs — atualize para ver novos protocolos." e um botão "Atualizar" (`location.reload()`). O contador de segundos atualiza em tempo real.
+   - Qualquer interação do usuário zera o contador e oculta o toast (se visível), através de `resetarAtividade()`.
 
 ### Chip Visual de Ciclo (`CICLO_CORES` + `injetarChipCiclo`)
 

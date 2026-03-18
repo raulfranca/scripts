@@ -9,6 +9,17 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 > **Regra de versionamento:** o número de versão representa o que está **publicado** (branch `main`). O progresso está em `## [Não publicado]` até o usuário disparar um lançamento. O agente de IA **nunca** altera `@version` nem promove `[Não publicado]` sem instrução explícita do usuário.
 
+## [Não publicado]
+
+## [0.6.0] — 2026-03-18
+
+### Adicionado — inbox
+
+- **Auto-refresh por inatividade:** a página do inbox recarrega automaticamente após 60 segundos sem interação do usuário, evitando que credenciadoras vejam listas desatualizadas. Comportamento:
+  - **Aba em segundo plano:** recarregamento via `location.reload()` ao atingir 60s de inatividade — pelo `setInterval` (verificação a cada 1s) ou imediatamente pelo `visibilitychange` ao trazer a aba à frente.
+  - **Aba em primeiro plano (sem interação):** exibe um toast fixo no canto inferior direito com o contador de segundos em tempo real e um botão "Atualizar".
+  - Qualquer interação (mouse, teclado, clique, scroll ou toque) zera o contador e oculta o toast.
+
 ## [0.5.0] — 2026-03-17
 
 ### Alterado — credenciamento

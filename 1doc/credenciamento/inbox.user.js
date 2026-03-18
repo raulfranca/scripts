@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Inbox (Credenciamento)
 // @namespace    http://tampermonkey.net/
-// @version      0.5.0
+// @version      0.6.0
 // @description  Painel de controle e abertura de protocolos em janela controlada para divisão de tela no credenciamento.
 // @author       Raul Cabral
 // @match        https://pindamonhangaba.1doc.com.br/*
@@ -34,6 +34,20 @@
         #modal-cred-inbox .cred-control-row:last-child { border-bottom: none; }
         #modal-cred-inbox label { margin: 0; font-weight: normal; cursor: pointer; }
         body.cred-hide-chips .cred-chip-ciclo { display: none !important; }
+        #cred-inbox-toast-refresh {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(30, 30, 30, 0.92);
+            color: #fff;
+            padding: 10px 16px;
+            border-radius: 6px;
+            z-index: 99999;
+            font-size: 13px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            align-items: center;
+            display: none;
+        }
     `);
 
     // 3. CHIP VISUAL DE CICLO
@@ -349,4 +363,54 @@
     injetarBotao();
     processarLinhas();
     atualizarVisibilidadeChips();
+
+    // 9. AUTO-REFRESH POR INATIVIDADE
+    const REFRESH_IDLE_SEC = 60;
+    let ultimaAtividade = Date.now();
+
+    function resetarAtividade() {
+        const toast = document.getElementById('cred-inbox-toast-refresh');
+        if (toast && toast.style.display !== 'none') return; // toast visível: usuário decide
+        ultimaAtividade = Date.now();
+    }
+
+    ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'].forEach(function (evt) {
+        document.addEventListener(evt, resetarAtividade, { passive: true });
+    });
+
+    function criarToastRefresh() {
+        if (document.getElementById('cred-inbox-toast-refresh')) return;
+        const toast = document.createElement('div');
+        toast.id = 'cred-inbox-toast-refresh';
+        const msg = document.createElement('span');
+        msg.id = 'cred-inbox-toast-msg';
+        const btn = document.createElement('button');
+        btn.className = 'btn btn-mini btn-warning';
+        btn.style.marginLeft = '10px';
+        btn.textContent = 'Atualizar';
+        btn.addEventListener('click', function () { location.reload(); });
+        toast.appendChild(msg);
+        toast.appendChild(btn);
+        document.body.appendChild(toast);
+    }
+
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) {
+            const inativo = Math.floor((Date.now() - ultimaAtividade) / 1000);
+            if (inativo >= REFRESH_IDLE_SEC) location.reload();
+        }
+    });
+
+    setInterval(function () {
+        const inativo = Math.floor((Date.now() - ultimaAtividade) / 1000);
+        if (inativo < REFRESH_IDLE_SEC) return;
+        if (document.hidden) {
+            location.reload();
+            return;
+        }
+        criarToastRefresh();
+        document.getElementById('cred-inbox-toast-msg').textContent =
+            'P\u00e1gina inativa h\u00e1 ' + inativo + 's \u2014 atualize para ver novos protocolos.';
+        document.getElementById('cred-inbox-toast-refresh').style.display = 'flex';
+    }, 1000);
 })();
