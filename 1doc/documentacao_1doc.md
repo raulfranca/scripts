@@ -72,7 +72,16 @@ O 1Doc renderiza o histórico de ações em blocos específicos. O monitoramento
 
 ### Ações de Barra Flutuante e Modais
 * **Botão "Arquivar + Parar de acompanhar":** `.botao_flutuante_4.bf_v_7` ou o fallback seguro `button[title*="Arquivar"][title*="Parar de acompanhar"]`.
+* **Botão "Responder":** `button.bf_v_1` — abre o formulário de resposta com Select2 de destinatário e TinyMCE.
+* **Botão "Reabrir conclusão":** `button.bf_v_19` — disponível apenas em protocolos concluídos/arquivados; sua ausência confirma que a ação foi executada.
+* **Presença de qualquer botão flutuante:** `[class*="botao_flutuante_"]` — útil para detectar que a barra de ações carregou antes de buscar um botão específico.
 * **Botão de Confirmação em Modais (ex: Sim, arquivar):** `#sim` (ID nativo e global para botões de confirmação positiva nos modais do 1Doc).
+
+### Formulário de Resposta (aberto por `bf_v_1`)
+* **Select2 de destinatário:** `#id_setor_responde` (select oculto); `#s2id_id_setor_responde .select2-choice` (trigger visual).
+* **Editor de mensagem:** TinyMCE — acessar via `window.tinymce.activeEditor` (ver seção 5.8).
+* **Botão Enviar:** `#enviar_documento` — clique após preencher destinatário e mensagem.
+* **Confirmação pós-envio:** modal com `#sim` (mesma mecânica do arquivamento).
 
 ### Modal de Revisão de Anexos (Tabela)
 
@@ -127,8 +136,66 @@ O 1Doc usa a biblioteca Select2 para campos de seleção múltipla, como **Marca
 * **Select Oculto Original (Alvo principal para jQuery):** `#marcadores_ids`
 * **Marcadores Ativos na Tela (Badges):** `.badge_marcador`
 
-> **⚠️ ATENÇÃO — Simulação visual de cliques no Select2 NÃO funciona de forma confiável.**
-> Simular `.select2-input.focus()` + `.click()` + `setTimeout` + `MouseEvent('mouseup')` foi testado e falha consistentemente (o marcador não é persistido). A **única abordagem confiável** é a injeção de `<script>` com jQuery descrita na seção 5.3 abaixo.
+> **⚠️ ATENÇÃO — Simulação visual de cliques no Select2 (multi-select, marcadores) NÃO funciona de forma confiável.**
+> Simular `.select2-input.focus()` + `.click()` + `setTimeout` + `MouseEvent('mouseup')` foi testado e falha consistentemente (o marcador não é persistido). A **única abordagem confiável** para o multi-select de marcadores é a injeção de `<script>` com jQuery descrita na seção 5.3 abaixo.
+
+### Select2 v3 — Automação de Dropdown Único (Formulários de Ação)
+
+Formulários de ação do 1Doc (ex: Responder, Encaminhar) usam Select2 v3 em campos de seleção única, como o destinatário da resposta. A abordagem de injeção de `<script>` da seção 5.3 **não se aplica** aqui — a automação via teclado é a solução confiável.
+
+**Seletores-chave:**
+* **Trigger do Select2:** `#s2id_NOME_DO_CAMPO .select2-choice` — ex: `#s2id_id_setor_responde .select2-choice`
+* **Select oculto original:** `#NOME_DO_CAMPO` — ex: `#id_setor_responde`
+* **Input de busca (após abrir):** `#select2-drop input.select2-input`
+* **Resultados filtrados:** `#select2-drop li.select2-result-selectable`
+
+**Problema: visibilidade vs. existência no DOM**
+
+O elemento `.select2-choice` pode existir no DOM antes do formulário estar renderizado (visível). Usar `offsetParent` como guard é obrigatório:
+
+```javascript
+// NÃO: if (!s2) return;            // existe mas pode estar oculto
+// SIM:
+if (!s2 || !s2.offsetParent) return; // offsetParent === null = elemento ou ancestral hidden
+```
+
+**Fluxo completo de automação:**
+
+```javascript
+// 1. Abrir o dropdown via jQuery API (mais confiável que .click())
+const selEl = document.getElementById('id_setor_responde');
+if (window.$ && selEl && typeof $(selEl).select2 === 'function') {
+    $(selEl).select2('open');
+} else {
+    // Fallback sem jQuery:
+    s2.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+    s2.click();
+}
+
+// 2. Aguardar o input de busca aparecer
+const input = document.querySelector('#select2-drop input.select2-input');
+
+// 3. Digitar o termo de busca (nome COMPLETO para evitar homônimos)
+const termo = nomeCompleto;
+if (window.$) {
+    $(input).val(termo).trigger('input').trigger('keyup');
+} else {
+    input.value = termo;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
+}
+
+// 4. Aguardar resultados e confirmar com Enter (Select2 seleciona o item em foco)
+// NÃO usar: $(li).trigger('mouseup') — testado e não confiável
+['keydown', 'keypress', 'keyup'].forEach(tipo => {
+    input.dispatchEvent(new KeyboardEvent(tipo, {
+        key: 'Enter', code: 'Enter', keyCode: 13, which: 13,
+        bubbles: true, cancelable: true,
+    }));
+});
+```
+
+> **Dica:** Usar o nome **completo** do destinatário como termo de busca (em vez do primeiro nome) elimina o risco de homônimos — o 1Doc pode ter vários setores/pessoas com o mesmo primeiro nome.
 
 ## 5. Snippets e Funções Padronizadas
 
@@ -253,23 +320,25 @@ const htmlCells = cells.map((val, i) =>
 const htmlData = `<table><tr>${htmlCells}</tr></table>`;
 ```
 ### 5.5 Automação de Modais (Interceptação Rápida)
-Quando o script clica em um botão nativo (como Arquivar), o 1Doc abre um modal com animação. Use este snippet para interceptar e confirmar o modal invisivelmente:
+Quando o script clica em um botão nativo (como Arquivar ou Enviar resposta), o 1Doc abre um modal com animação. Use este snippet para interceptar e confirmar o modal invisivelmente:
 
 ```javascript
 botaoAcaoNativo.click();
 
 const monitorarDialog = setInterval(() => {
     const btnConfirmar = document.getElementById('sim');
-    // Confirma que o botão existe, tem o texto certo e está visível na tela (offsetWidth > 0)
-    if (btnConfirmar && btnConfirmar.innerText.includes('Arquivar') && btnConfirmar.offsetWidth > 0) {
-        btnConfirmar.click();
+    // offsetParent === null significa que o elemento existe mas ainda está oculto
+    if (btnConfirmar && btnConfirmar.offsetParent) {
         clearInterval(monitorarDialog);
+        btnConfirmar.click();
     }
-}, 100);
+}, 200);
 
 // Fallback de segurança para não vazar memória
 setTimeout(() => clearInterval(monitorarDialog), 5000);
 ```
+
+> **`offsetParent` vs `offsetWidth`:** Prefira `offsetParent !== null` como guard de visibilidade. Um elemento com `offsetParent === null` está oculto por um ancestral (display:none, visibility:hidden). `offsetWidth > 0` pode ser enganado por elementos invisíveis que ainda ocupam espaço.
 
 ### 5.6 Scroll Suave e Destaque Visual (Highlight)
 Para guiar o olhar do usuário até um elemento específico após uma ação:
@@ -296,6 +365,103 @@ window.scrollTo({ top: offsetTop, behavior: 'smooth' });
 elementoAlvo.classList.remove('highlight-target');
 setTimeout(() => elementoAlvo.classList.add('highlight-target'), 10);
 ```
+
+### 5.7 Automação Sequencial Multi-etapa (setInterval Encadeado)
+
+Fluxos com múltiplas etapas assíncronas (ex: abrir form → aguardar Select2 → aguardar TinyMCE → enviar → aguardar confirmação) exigem que cada passo só comece após o anterior ser concluído. A solução é aninhar os `setInterval` em cadeia — **não em paralelo**:
+
+```javascript
+const MAX = 12000; // timeout por etapa (ms)
+
+// Etapa 1: aguardar elemento A
+const ivEtapa1 = setInterval(() => {
+    const elementoA = document.querySelector('...');
+    if (!elementoA || !elementoA.offsetParent) return; // não pronto ainda
+    clearInterval(ivEtapa1); // ✓ pronto — iniciar próxima etapa
+
+    elementoA.click();
+    const t1 = Date.now();
+
+    // Etapa 2: aguardar elemento B (aninhado dentro do callback)
+    const ivEtapa2 = setInterval(() => {
+        if (Date.now() - t1 > MAX) { clearInterval(ivEtapa2); return; }
+        const elementoB = document.querySelector('...');
+        if (!elementoB) return;
+        clearInterval(ivEtapa2);
+
+        const t2 = Date.now();
+        // Etapa 3: aguardar elemento C (aninhado dentro do callback)
+        const ivEtapa3 = setInterval(() => {
+            if (Date.now() - t2 > MAX) { clearInterval(ivEtapa3); return; }
+            // ... e assim por diante
+        }, 200);
+    }, 200);
+}, 300);
+```
+
+> **Armadilha:** declarar todos os `setInterval` no mesmo escopo (em paralelo) faz todos dispararem simultaneamente, ignorando a sequência. Sempre **aninhe** o próximo `setInterval` dentro do `clearInterval` do anterior.
+
+### 5.8 TinyMCE — Espera e Edição Programática
+
+O TinyMCE leva alguns instantes para inicializar após o formulário ser renderizado. Tentar `setContent` antes do editor estar pronto causa erro silencioso. Padrão correto:
+
+```javascript
+const ivEditor = setInterval(() => {
+    // Aguarda o objeto global existir E o body interno estar pronto
+    if (!window.tinymce || !tinymce.activeEditor) return;
+    const editor = tinymce.activeEditor;
+    if (!editor.getBody()) return; // editor existe mas o iframe ainda não inicializou
+    clearInterval(ivEditor);
+
+    editor.setContent('<p>Conteúdo da mensagem aqui.</p>');
+
+    // Aguardar um frame antes de clicar em Enviar
+    setTimeout(() => {
+        const btnEnviar = document.getElementById('enviar_documento');
+        if (btnEnviar) btnEnviar.click();
+    }, 400);
+}, 300);
+```
+
+> `window.tinymce` pode existir mas `tinymce.activeEditor` ser `null` enquanto o editor carrega. O duplo guard (`activeEditor` + `getBody()`) é necessário.
+
+### 5.9 Override de Estilos Inline com `!important`
+
+O 1Doc define `background-color` e outros estilos diretamente via `element.style` (inline), que tem precedência maior que qualquer CSS de stylesheet. Para sobrepor isso em linhas do inbox ou outros elementos:
+
+```javascript
+// NÃO funciona quando o 1Doc já definiu element.style.backgroundColor:
+tr.style.backgroundColor = '#e6f9ee';
+
+// SIM — setProperty com 'important' cria um inline !important:
+tr.style.setProperty('background-color', '#e6f9ee', 'important');
+tr.style.setProperty('box-shadow', 'inset 3px 0 0 #27ae60', 'important');
+// Para cada <td> dentro da linha também:
+tr.querySelectorAll('td').forEach(td =>
+    td.style.setProperty('background-color', '#e6f9ee', 'important')
+);
+```
+
+### 5.10 Preservação da URL do Inbox para Navegação Confiável
+
+`history.back()` é instável em fluxos que navegam por múltiplos protocolos em sequência — o histórico pode não apontar para o inbox ou pode ter sido contaminado por redirects internos do 1Doc. Padrão correto:
+
+```javascript
+const LS_INBOX_URL = 'meu_script_inbox_url';
+
+// Salvar ao entrar no inbox:
+function iniciarInbox() {
+    localStorage.setItem(LS_INBOX_URL, location.href);
+    // ...
+}
+
+// Usar no lugar de history.back():
+function navegarInbox() {
+    location.href = localStorage.getItem(LS_INBOX_URL) || location.origin;
+}
+```
+
+> Use `location.origin` como fallback caso a chave não exista (ex: primeiro acesso após limpar localStorage).
 
 ## 6. Diretrizes de Layout e Estilo (UI/UX)
 

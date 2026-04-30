@@ -11,6 +11,30 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+### Adicionado — folha
+
+- **Novo script `folha.user.js` (v0.1.0):** Painel com dois modos: **Entrada** (seletor de 12 meses em grade + textarea de protocolos + botão "Iniciar coleta") e **Coleta** (stats: Mês, Na lista, Visíveis, Já coletados, Faltam; botões "Editar lista" e "Limpar tudo"). Mês salvo em `LS_MES` (`1doc_folha_mes`). Lista em `LS_LISTA`, progresso em `LS_COLETADOS`, modo em `LS_MODO`. Destaque visual das linhas encontradas via `setProperty('background-color', ..., 'important')` nos `<td>` (sobrepõe estilos inline do 1Doc). Ao clicar em protocolo destacado na página `pg=doc/ver`: rola para o fim, copia `MÊS-AA NomeDaPessoa` para o clipboard, intercepta cliques em `a[href*="pg=doc/anexo"]` para abrir em janela metade da tela (direita), exibe dialog centralizado (backdrop `pointer-events:none`) perguntando se a folha foi salva; "Sim" registra coleta em `LS_COLETADOS` e volta ao inbox; "Não" apenas fecha o dialog. Preserva coletados ao editar lista; "Limpar tudo" zera tudo inclusive o mês.
+
+### Alterado — folha
+
+- **Resposta automática ao coletar:** Após "Sim" no dialog, em vez de voltar ao inbox diretamente, o script clica no botão flutuante "Responder" (`button.bf_v_1`), aguarda o TinyMCE inicializar, insere mensagem confirmando recebimento da folha de frequência (com nome da pessoa e mês de referência) e clica em `#enviar_documento`. Só volta ao inbox após o envio (~2,5 s).
+- **Formato de entrada `Nome\tProtocolo`:** Textarea agora aceita linhas separadas por tabulação (`Nome\tNúmero`). `parsearEntrada` extrai o par; `LS_LISTA` passa a armazenar `Array<{nome, numero}>` em vez de `string[]`. O nome da lista é usado no clipboard ao coletar (mais confiável que extração do DOM).
+- **Botão "👁 Ver lista" no modo coleta:** Abre modal overlay com todos os protocolos da lista, exibindo nome + número e badge "✓ Coletado" / "⏳ Pendente" para cada um. Clicar fora do modal fecha-o.
+- **Label textarea atualizado:** Placeholder e label refletem o novo formato `Nome\tNúmero`.
+
+### Adicionado — desconcluir
+
+- **Novo script `desconcluir.user.js` (v0.1.0):** Etapa 1 — painel de controle no inbox de arquivados (`caixa=arquivo`) que lista protocolos via `a.link_emissao_a`, mantém log de verificados em `localStorage` (`1doc_desconcluir_log`) e abre um por um em janela controlada (`window.open` com nome fixo `desconcluir-protocolo`). Protocolos já verificados são exibidos com opacidade reduzida.
+
+### Alterado — desconcluir
+
+- **v0.2.0 — Etapa 2:** Script agora age na página do protocolo (branch `pg=doc/ver`). Quando encontra o botão `button.bf_v_19` ("Reabrir conclusão"), clica nele, aguarda o modal Bootstrap (`.modal.in #sim`) e confirma. Depois navega de volta ao inbox via `history.back()`. Novos keys de localStorage: `LS_REABERTOS`, `LS_ATIVO`, `LS_EM_PROCESSO`, `LS_ULTIMO`. Painel do inbox exibe resultado do último protocolo processado e contador de reabertos. Abertura migrou de `window.open` para navegação na mesma aba (`location.href`).
+- **v0.3.0 — Modo automático + log:** Adicionado `LS_AUTO` para avanço automático entre protocolos. Botão principal substituído por toggle "▶ Iniciar / ⏸ Pausar" (vermelho quando ativo). Ao retornar ao inbox com modo automático ativo, o próximo protocolo abre automaticamente após 800 ms. Adicionado botão "📋 Ver log" que abre modal overlay com todos os protocolos analisados, indicando quais foram reabertos e quais não precisaram de ação.
+- **v0.4.0 — Detecção contínua de página:** Substituído polling único por `setInterval` de 1 s que detecta mudanças de URL (`num_pagina=N`) e de quantidade de links. Ao navegar para uma nova página, o painel atualiza automaticamente e o modo automático retoma se estiver ativo. Opacidade das linhas verificadas é reaplicada a cada tick (idempotente), garantindo que linhas recém-renderizadas fiquem cinzas.
+- **v0.5.0 — Interceptação de confirm nativo:** `processarReabertura` agora sobrescreve `window.confirm = () => true` antes de clicar no botão `bf_v_19`, aceitando automaticamente o dialog nativo do navegador (síncrono). Após o clique, o intervalo de verificação trata dois caminhos: A) modal Bootstrap `.modal.in #sim` aparece → clica; B) `bf_v_19` desaparece diretamente via AJAX sem modal → marca reaberto. Eliminada dependência do modal Bootstrap como único critério de sucesso.
+- **v0.6.0 — Espera manual infinita ao reabrir:** Quando `bf_v_19` é encontrado, o script clica, contabiliza o sucesso imediatamente e aguarda **indefinidamente** o botão sumir (sem timeout). Removidos `window.confirm` override e `aguardarSucessoReabertura`. O automatismo retoma sozinho quando o usuário conclui os dialogs manualmente e o botão desaparece do DOM.
+- **v0.7.0 — Paginação automática:** Adicionada `navegarProximaPagina()` que clica em `li.pagination_arrow a.navega_caixa i.icon-chevron-right` quando não há mais protocolos pendentes na página atual e o modo automático está ativo. O `tick()` de 1 s detecta a mudança de URL/conteúdo e retoma o ciclo na nova página automaticamente. Se não houver próxima página, o modo automático é encerrado.
+
 ## [0.6.0] — 2026-03-18
 
 ### Adicionado — inbox
