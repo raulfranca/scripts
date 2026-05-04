@@ -11,6 +11,13 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+### Adicionado — educafacil
+
+- **Novo script `educafacil.user.js` (v0.1.0):** Painel fixo no topo direito da tela no portal EducaFácil (`professor.educapindamonhangaba.com.br`) para preenchimento automático de solicitações de substituição de professores. Permite colar CSV separado por Tab (colunas: Status, Data Início, Data Fim, Dias, Período, Região, Escola, Turma, Professor). Dados persistidos em `localStorage` (`efSubs_rows`, `efSubs_status`). Lista de controle com status por linha (`pendente`, `preenchendo`, `preenchido`, `ignorado`, `erro`). Botões "Preencher" e "Ignorar/Restaurar" por linha. Resumo de contagem no topo.
+- **Preenchimento automático:** Tipo (fixo "Educação Básica") → Escola (`ng-select#escola`) → Período (`ng-select#periodo`) → Data Início (`input#dataInicio`) → Data Fim (`input#dataFim`) → Professor (`ng-select#professor`, digita o nome + Enter) → Observação/Turma (`textarea#observacao`). Campo "Turmas" (`ng-select#turmas`, desabilitado) não é preenchido.
+- **Helpers:** `selecionarNgSelect()` (abre dropdown, filtra, clica melhor opção); `digitarNgSelectEnter()` (abre, digita, tecla Enter — usado no campo professor); `setTextareaValue()` (setter nativo para Angular).
+- **Painel collapse:** Header clicável recolhe/expande o corpo do painel; estado salvo em `localStorage` (`efSubs_collapsed`). Painel sempre visível no topo — sem botão flutuante separado.
+
 ### Adicionado — folha
 
 - **Novo script `folha.user.js` (v0.1.0):** Painel com dois modos: **Entrada** (seletor de 12 meses em grade + textarea de protocolos + botão "Iniciar coleta") e **Coleta** (stats: Mês, Na lista, Visíveis, Já coletados, Faltam; botões "Editar lista" e "Limpar tudo"). Mês salvo em `LS_MES` (`1doc_folha_mes`). Lista em `LS_LISTA`, progresso em `LS_COLETADOS`, modo em `LS_MODO`. Destaque visual das linhas encontradas via `setProperty('background-color', ..., 'important')` nos `<td>` (sobrepõe estilos inline do 1Doc). Ao clicar em protocolo destacado na página `pg=doc/ver`: rola para o fim, copia `MÊS-AA NomeDaPessoa` para o clipboard, intercepta cliques em `a[href*="pg=doc/anexo"]` para abrir em janela metade da tela (direita), exibe dialog centralizado (backdrop `pointer-events:none`) perguntando se a folha foi salva; "Sim" registra coleta em `LS_COLETADOS` e volta ao inbox; "Não" apenas fecha o dialog. Preserva coletados ao editar lista; "Limpar tudo" zera tudo inclusive o mês.

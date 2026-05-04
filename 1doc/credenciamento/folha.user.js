@@ -34,25 +34,63 @@
 
     function salvarLista(lista) { localStorage.setItem(LS_LISTA, JSON.stringify(lista)); }
 
-    // Parseia linhas "Nome\tProtocolo" ou só "Protocolo"
+    // Parseia CSV com cabeçalho (Professor\tProtocolo\tCPF\t...) ou formatos legados
     function parsearEntrada(texto) {
         const protoRegex = /(\d+\.\d{3}\/\d{4})/;
         const vistos     = new Set();
         const resultado  = [];
-        texto.split('\n').forEach(linha => {
-            const partes  = linha.trim().split('\t');
-            let nome = '', numero = '';
-            if (partes.length >= 2) {
-                nome   = partes[0].trim();
+        const linhas     = texto.split('\n').map(l => l.trim()).filter(Boolean);
+        if (linhas.length === 0) return resultado;
+
+        // Detectar cabeçalho pela presença das palavras-chave nas colunas
+        const primeira      = linhas[0].toLowerCase();
+        const temCabecalho  = primeira.includes('protocolo') || primeira.includes('professor');
+
+        let colNome = 0, colNumero = 1, colCpf = -1, colCidade = -1,
+            colEmail = -1, colCelular = -1, colPis = -1, colFolha = -1;
+        let inicioLinha = 0;
+
+        if (temCabecalho) {
+            const cols = linhas[0].split('\t').map(c => c.trim().toLowerCase());
+            colNome    = cols.findIndex(c => c === 'professor');
+            colNumero  = cols.findIndex(c => c === 'protocolo');
+            colCpf     = cols.findIndex(c => c === 'cpf');
+            colCidade  = cols.findIndex(c => c === 'cidade');
+            colEmail   = cols.findIndex(c => c.includes('e-mail') || c === 'email');
+            colCelular = cols.findIndex(c => c === 'celular');
+            colPis     = cols.findIndex(c => c.includes('pis'));
+            colFolha   = cols.findIndex(c => c.includes('folha'));
+            inicioLinha = 1;
+        }
+
+        linhas.slice(inicioLinha).forEach(linha => {
+            const partes = linha.split('\t');
+            let nome = '', numero = '', cpf = '', cidade = '', email = '', celular = '', pis = '', folhaEnviada = '';
+
+            if (temCabecalho) {
+                nome         = colNome    >= 0 ? (partes[colNome]    || '').trim() : '';
+                const raw    = colNumero  >= 0 ? (partes[colNumero]  || '').trim() : '';
+                const m      = raw.match(protoRegex) || linha.match(protoRegex);
+                if (m) numero = m[1];
+                cpf          = colCpf     >= 0 ? (partes[colCpf]     || '').trim() : '';
+                cidade       = colCidade  >= 0 ? (partes[colCidade]  || '').trim() : '';
+                email        = colEmail   >= 0 ? (partes[colEmail]   || '').trim() : '';
+                celular      = colCelular >= 0 ? (partes[colCelular] || '').trim() : '';
+                pis          = colPis     >= 0 ? (partes[colPis]     || '').trim() : '';
+                folhaEnviada = colFolha   >= 0 ? (partes[colFolha]   || '').trim() : '';
+            } else if (partes.length >= 2) {
+                // Formato legado: Nome\tProtocolo
+                nome = partes[0].trim();
                 const m = partes[partes.length - 1].match(protoRegex);
                 if (m) numero = m[1];
             } else {
                 const m = linha.match(protoRegex);
                 if (m) numero = m[1];
             }
+
             if (!numero || vistos.has(numero)) return;
             vistos.add(numero);
-            resultado.push({ nome, numero });
+            resultado.push({ nome, numero, cpf, cidade, email, celular, pis, folhaEnviada });
         });
         return resultado;
     }
@@ -77,7 +115,16 @@
     // ════════════════════════════════════════════════════════════════════════
 
     function iniciarInbox() {
-        localStorage.setItem(LS_INBOX_URL, location.href);
+        // Salvar URL limpa — remove params transitórios que o 1Doc injeta após ações
+        // (forcaajax=1 causa toast + history.replaceState, confundindo a detecção de mudança de URL)
+        try {
+            const u = new URL(location.href);
+            ['forcaajax', 'erros', 'rol'].forEach(p => u.searchParams.delete(p));
+            localStorage.setItem(LS_INBOX_URL, u.toString());
+        } catch {
+            localStorage.setItem(LS_INBOX_URL, location.href);
+        }
+
         let ultimaUrl      = '';
         let ultimaQtdLinks = -1;
 
@@ -90,23 +137,49 @@
             if (qtd > 0 && lerModo() === 'coleta') aplicarDestaques();
 
             const mudou = urlAtual !== ultimaUrl || qtd !== ultimaQtdLinks;
-            if (!mudou) return;
 
             ultimaUrl      = urlAtual;
             ultimaQtdLinks = qtd;
 
             if (qtd === 0) return;
 
-            if (!document.getElementById('folha-painel')) criarPainel();
-            atualizarPainel();
+            // Garante o painel mesmo que o 1Doc tenha removido o elemento do DOM
+            const painelExiste = !!document.getElementById('folha-painel');
+            if (!painelExiste) criarPainel();
+
+            if (mudou || !painelExiste) atualizarPainel();
+        }
+
+        // MutationObserver: reage imediatamente quando o 1Doc insere os links no DOM via AJAX
+        // (resolve o caso em que forcaajax=1 faz a URL mudar antes dos links aparecerem,
+        // deixando o setInterval "achar" que nada mudou quando os links finalmente chegam)
+        let debounceTimer = null;
+        const observer = new MutationObserver(() => {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(tick, 100);
+        });
+
+        function iniciar() {
+            observer.observe(document.body, { childList: true, subtree: true });
+            tick();
+            setInterval(tick, 1500);
         }
 
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => { tick(); setInterval(tick, 1000); });
+            document.addEventListener('DOMContentLoaded', iniciar);
         } else {
-            tick();
-            setInterval(tick, 1000);
+            iniciar();
         }
+
+        // BFCache: browser restaura a página do cache ao pressionar Voltar —
+        // os setIntervals podem não reiniciar; forçar tick com estado resetado
+        window.addEventListener('pageshow', e => {
+            if (e.persisted) {
+                ultimaUrl      = '';
+                ultimaQtdLinks = -1;
+                tick();
+            }
+        });
     }
 
     function extrairNumero(linkEl) {
@@ -254,6 +327,7 @@
         } else {
             renderizarModoColeta(painel);
         }
+        renderizarBotoesTransferencia(painel);
     }
 
     // ── Modo Entrada ───────────────────────────────────────────────────────
@@ -310,7 +384,7 @@
         const textarea = document.createElement('textarea');
         textarea.id = 'folha-textarea';
         textarea.value = lista.map(e => e.nome ? `${e.nome}\t${e.numero}` : e.numero).join('\n');
-        textarea.placeholder = 'Ana Paula da Silva\t14.712/2026\nBianca de Souza\t13.049/2026';
+        textarea.placeholder = 'Professor\tProtocolo\tCPF\tCidade\tE-mail\tCelular\tPIS/PASEP/NIT/NIS\tFolha enviada\nAna Paula da Silva\t14.712/2026\t044.678.546-65\t...\n(ou cole diretamente do Excel/Sheets com cabeçalho)';    
         textarea.rows = 7;
         textarea.style.cssText = [
             'display:block', 'width:100%', 'box-sizing:border-box',
@@ -344,7 +418,25 @@
                 textarea.focus();
                 return;
             }
-            salvarLista(novaLista);
+
+            // Merge: protocolos repetidos recebem os campos extras atualizados;
+            // protocolos novos são adicionados ao final da lista existente.
+            const listaAtual  = lerLista();
+            const listaMerged = listaAtual.map(existente => {
+                const novo = novaLista.find(n => n.numero === existente.numero);
+                if (!novo) return existente;
+                // Preserva nome já salvo se o novo vier vazio; atualiza demais campos
+                return Object.assign({}, existente, novo, {
+                    nome: (existente.nome && existente.nome.trim()) ? existente.nome : novo.nome,
+                });
+            });
+            novaLista.forEach(novo => {
+                if (!listaMerged.find(e => e.numero === novo.numero)) {
+                    listaMerged.push(novo);
+                }
+            });
+
+            salvarLista(listaMerged);
             localStorage.setItem(LS_MODO, 'coleta');
             removerTodosDestaques();
             aplicarDestaques();
@@ -427,6 +519,83 @@
         painel.appendChild(btnLimpar);
     }
 
+    // ── Exportar / Importar ────────────────────────────────────────────────
+    function renderizarBotoesTransferencia(painel) {
+        const sep = document.createElement('div');
+        sep.style.cssText = 'border-top:1px solid #eee;margin:10px 0 8px;';
+        painel.appendChild(sep);
+
+        const label = document.createElement('div');
+        label.style.cssText = 'font-size:11px;color:#aaa;margin-bottom:5px;text-align:center;';
+        label.textContent = 'Transferência entre navegadores';
+        painel.appendChild(label);
+
+        const row = document.createElement('div');
+        row.style.cssText = 'display:flex;gap:6px;';
+
+        const btnExp = document.createElement('button');
+        btnExp.textContent = '⬇ Exportar';
+        btnExp.title = 'Salvar dados em arquivo JSON';
+        btnExp.style.cssText = [
+            'flex:1', 'padding:5px 0',
+            'background:#f5f5f5', 'color:#333',
+            'border:1px solid #ccc', 'border-radius:4px',
+            'cursor:pointer', 'font-size:11px',
+        ].join(';');
+        btnExp.addEventListener('click', () => {
+            const keys = [LS_LISTA, LS_COLETADOS, LS_MODO, LS_MES, LS_INBOX_URL];
+            const data = {};
+            keys.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href     = url;
+            a.download = `folha-frequencia-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+        row.appendChild(btnExp);
+
+        const btnImp = document.createElement('button');
+        btnImp.textContent = '⬆ Importar';
+        btnImp.title = 'Carregar dados de arquivo JSON exportado';
+        btnImp.style.cssText = [
+            'flex:1', 'padding:5px 0',
+            'background:#f5f5f5', 'color:#333',
+            'border:1px solid #ccc', 'border-radius:4px',
+            'cursor:pointer', 'font-size:11px',
+        ].join(';');
+        btnImp.addEventListener('click', () => {
+            const input  = document.createElement('input');
+            input.type   = 'file';
+            input.accept = '.json,application/json';
+            input.addEventListener('change', () => {
+                const file = input.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = e => {
+                    try {
+                        const data = JSON.parse(e.target.result);
+                        let count = 0;
+                        Object.entries(data).forEach(([k, v]) => {
+                            localStorage.setItem(k, v);
+                            count++;
+                        });
+                        alert(`${count} chave(s) importada(s). A página será recarregada.`);
+                        location.reload();
+                    } catch {
+                        alert('Arquivo inválido. Verifique se é o JSON exportado pelo script.');
+                    }
+                };
+                reader.readAsText(file);
+            });
+            input.click();
+        });
+        row.appendChild(btnImp);
+
+        painel.appendChild(row);
+    }
+
     function mostrarModalLista() {
         if (document.getElementById('folha-modal-lista')) return;
         const lista     = lerLista();
@@ -483,7 +652,7 @@
             vazio.textContent = 'Nenhum protocolo na lista.';
             corpo.appendChild(vazio);
         } else {
-            lista.forEach(({ nome, numero }) => {
+            lista.forEach(({ nome, numero, celular }) => {
                 const coletado = colNums.includes(numero);
                 const item = document.createElement('div');
                 item.style.cssText = [
@@ -524,8 +693,38 @@
                 }
                 badge.textContent = coletado ? '✓ Coletado' : '⏳ Pendente';
 
+                // Lado direito: badge + botão WhatsApp
+                const direita = document.createElement('div');
+                direita.style.cssText = 'display:flex;align-items:center;gap:6px;flex-shrink:0;';
+                direita.appendChild(badge);
+
+                if (celular) {
+                    const fone       = '55' + celular.replace(/\D/g, '');
+                    const primeiroNome = (nome || '').split(' ')[0];
+                    const mesAbrev   = lerMes().split('-')[0].toUpperCase();
+                    const mesesNomes = {JAN:'janeiro',FEV:'fevereiro',MAR:'março',ABR:'abril',
+                        MAI:'maio',JUN:'junho',JUL:'julho',AGO:'agosto',
+                        SET:'setembro',OUT:'outubro',NOV:'novembro',DEZ:'dezembro'};
+                    const mesExtenso = mesesNomes[mesAbrev] || lerMes();
+                    let waUrl;
+                    if (!coletado) {
+                        const msg = `Olá, ${primeiroNome}! Aqui é o Raul, da Secretaria de Educação. Ainda não recebemos sua folha de frequência do mês de ${mesExtenso} pelo 1Doc, necessária para processar o seu pagamento.\n\nPara enviar, siga o tutorial: https://sme-pinda.vercel.app/credenciamento/Tutorial%20Folha%20de%20Frequ%C3%AAncia.pdf`;
+                        waUrl = `https://wa.me/${fone}?text=${encodeURIComponent(msg)}`;
+                    } else {
+                        waUrl = `https://wa.me/${fone}`;
+                    }
+                    const wa = document.createElement('a');
+                    wa.href   = waUrl;
+                    wa.target = '_blank';
+                    wa.rel    = 'noopener';
+                    wa.title  = celular;
+                    wa.style.cssText = 'font-size:16px;text-decoration:none;line-height:1;flex-shrink:0;opacity:0.8;';
+                    wa.textContent = '💬';
+                    direita.appendChild(wa);
+                }
+
                 item.appendChild(info);
-                item.appendChild(badge);
+                item.appendChild(direita);
                 corpo.appendChild(item);
             });
         }
@@ -751,21 +950,10 @@ function mostrarDialogColeta(numero, handlerAnexo) {
                         // 5. Compor mensagem
                         editor.setContent('<p>Prezada(o), folha de frequência recebida.<br>Atenciosamente,</p>');
 
-                        // 6. Clicar em "Responder" (submit)
+                        // 6. Marcar "Arquivar" — usuário completa o envio manualmente
                         setTimeout(() => {
-                            const btnEnviar = document.getElementById('enviar_documento');
-                            if (btnEnviar) btnEnviar.click();
-
-                            // 7. Aguardar dialog de confirmação e clicar em "sim"
-                            const t4 = Date.now();
-                            const ivSim = setInterval(() => {
-                                if (Date.now() - t4 > MAX) { clearInterval(ivSim); navegarInbox(); return; }
-                                const btnSim = document.getElementById('sim');
-                                if (!btnSim || !btnSim.offsetParent) return;
-                                clearInterval(ivSim);
-                                btnSim.click();
-                                setTimeout(() => navegarInbox(), 3000);
-                            }, 200);
+                            const chkArquivar = document.querySelector('input[name="marcar_resolvido"]');
+                            if (chkArquivar && !chkArquivar.checked) chkArquivar.click();
                         }, 400);
                     }, 300);
                 }, 200);
