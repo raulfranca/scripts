@@ -22,6 +22,7 @@
 | `cpfDigitos` | `string` | por candidato | Apenas dígitos do CPF (11 chars) |
 | `rgDigitos` | `string` | por candidato | Apenas dígitos do RG |
 | `nacionalidade` | `string` | por candidato | Default: `'brasileira'` |
+| `dataNascimento` | `string` | por candidato | Data de nascimento no formato `'DD/MM/AAAA'`; vazio se não preenchido |
 | `estadoCivil` | `string` | por candidato | Estado civil selecionado |
 | `celularDigitos` | `string` | por candidato | Apenas dígitos do celular (10–11 chars) |
 | `email` | `string` | por candidato | E-mail do candidato |
@@ -59,6 +60,7 @@
 | `registrarEventListenersFormulario` | Registra máscaras progressivas e handlers dos campos: CPF, RG, Nacionalidade, Estado civil, Celular, E-mail, Função (toggle múltiplo), Regiões (toggle múltiplo) |
 | `injetarControlesNoModal` | **Orquestrador principal**: injeta header, info-block, formulário, ficha, outros-anexos, botões Sim/Não e footer; guard via atributo `data-cred-injetado`; chama `resetarEstadoCandidato` e `executarFluxo` |
 | `moverFichaInscricao` | Remove linha "I - Ficha de Inscrição" da tabela nativa e a reposiciona como `<div id="cred-ficha-inscricao">` acima do formulário; chama `adicionarColunaStatusNaTabela` para categoria `'I'` |
+| `moverDocIdentidade` | Remove linha "II – Cópia de documento de Identidade..." da tabela nativa e a injeta como `<div id="cred-doc-identidade">` no final do `formContainer` (seção Dados Pessoais); chama `adicionarColunaStatusNaTabela` para categoria `'II'`; pula categoria II em `injetarBotoesCategorias` |
 | `injetarOutrosAnexos` | Compara IDs de `#table_anexos_filhos` com os já no modal (via parâmetro `iea` base64); injeta linha `#cred-outros-anexos` com anexos avulsos de despachos posteriores |
 | `criarGrupoBotoes` | Cria `<div class="cred-simnao-group" data-categoria="…">` com botões Sim/Não; toggle: clique duplo deseleciona; atualiza `avaliacoesDocs` e chama `atualizarChipHabilitacao` |
 | `adicionarColunaStatusNaTabela` | Reutiliza coluna "Status da revisão" da inner table; injeta `criarGrupoBotoes` com `rowspan`; oculta botões "Revisar" nativos; fallback: adiciona coluna no final |
@@ -126,6 +128,7 @@
 | `btn-credenciamento` | `injetarBotao` | Botão "Credenciamento" na barra do 1Doc |
 | `cred-form-container` | `criarFormulario` | Container com todos os campos do candidato |
 | `cred-ficha-inscricao` | `moverFichaInscricao` | Bloco destacado com a Ficha de Inscrição |
+| `cred-doc-identidade` | `moverDocIdentidade` | Bloco com o doc de identidade (categoria II) injetado ao final do `formContainer`, dentro de Dados Pessoais |
 | `cred-outros-anexos` | `injetarOutrosAnexos` | Linha na tabela com anexos avulsos de despachos |
 | `cred-btn-duvida` | `injetarControlesNoModal` | Botão "Dúvida" (vermelho) no footer; visível apenas enquanto `_estaCompleto()` é falso |
 | `cred-btn-executar` | `injetarControlesNoModal` | Botão "Copiar"/"Processando..." no footer do modal |
@@ -134,6 +137,9 @@
 | `cred-rg` | `criarFormulario` | Input RG (máscara `00.000.000-0`) |
 | `cred-banco-input` | `criarFormulario` | Input Banco (campo de texto livre) |
 | `cred-nacionalidade` | `criarFormulario` | Input Nacionalidade (default: `brasileira`) |
+| `cred-nascimento` | `criarFormulario` | Input Data de Nascimento (máscara `DD/MM/AAAA`; inputmode numeric) |
+| `cred-nascimento-picker-btn` | `criarFormulario` | Botão calendário que aciona o `input[type=date]` nativo oculto |
+| `cred-nascimento-date` | `criarFormulario` | `input[type=date]` invisível usado como date picker nativo |
 | `cred-celular` | `criarFormulario` | Input Celular (máscara `(00) 00000-0000`) |
 | `cred-email` | `criarFormulario` | Input E-mail |
 | `cred-nome-input` | `injetarControlesNoModal` | Input Nome do candidato (editável, preenchido por `executarFluxo`) |
@@ -195,25 +201,37 @@ observerUI (MutationObserver)
 
 | Col | Dado |
 |---|---|
-| A | Data de envio |
-| B | Número do protocolo (hyperlink no HTML, texto puro no plain) |
-| C | Credenciadora |
-| D | Nome do candidato |
-| E | CPF (apenas dígitos) |
-| F | CEP (apenas dígitos) |
-| G | Logradouro |
-| H | Número |
-| I | Bairro |
-| J | Cidade |
-| K | Código COMPE do banco (sempre vazio — campo de texto livre) |
-| L | Nome do banco |
-| M | Chave Pix |
-| N | `Educação Básica` (se selecionada, senão vazio) |
-| O | `Educação Física` (se selecionada, senão vazio) |
-| P | `Artes` (se selecionada, senão vazio) |
-| Q–U | Regiões 1–5 (número da região ou vazio) |
-| V–AF | Documentos I–XI (`sim` / `não` / vazio) |
-| AG | Resultado: `habilitado` ou `inabilitado` |
+| A | Analisado por (credenciadora) |
+| B | Data e hora de envio |
+| C | Resultado: `habilitado` ou `inabilitado` |
+| D | Nome do professor (candidato) |
+| E | Protocolo 1Doc (hyperlink no HTML, texto puro no plain) |
+| F | Motivo da inabilitação (reservado — sempre vazio) |
+| G | CPF (apenas dígitos) |
+| H | RG (apenas dígitos) |
+| I | Nacionalidade |
+| J | Data de Nascimento (`DD/MM/AAAA`) |
+| K | Estado Civil |
+| L | Etnia (reservado — sempre vazio) |
+| M | CEP (apenas dígitos) |
+| N | Logradouro |
+| O | Número |
+| P | Bairro |
+| Q | Cidade |
+| R | E-mail |
+| S | Celular (apenas dígitos) |
+| T | Banco |
+| U | Chave Pix |
+| V | Agência Santander (reservado — sempre vazio) |
+| W | Conta Corrente (reservado — sempre vazio) |
+| X | Nome no Banco (reservado — sempre vazio) |
+| Y | PIS/PASEP/NIT/NIS (apenas dígitos) |
+| Z | `Educação Básica` (se selecionada, senão vazio) |
+| AA | `Educação Física` (se selecionada, senão vazio) |
+| AB | `Artes` (se selecionada, senão vazio) |
+| AC–AG | Regiões 1–5 (número da região ou vazio) |
+| AH–AR | Documentos I–XI (`sim` / `não` / vazio) |
+| AS | Ciclo |
 
 ---
 

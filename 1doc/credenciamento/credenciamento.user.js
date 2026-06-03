@@ -33,6 +33,7 @@
     let cpfDigitos = '';          // apenas os dígitos do CPF
     let rgDigitos = '';           // apenas os dígitos do RG
     let nacionalidade = 'brasileira'; // pré-preenchido, editável
+    let dataNascimento = '';          // DD/MM/AAAA
     let estadoCivil = '';         // estado civil selecionado
     let celularDigitos = '';      // apenas os dígitos do celular
     let email = '';               // e-mail do candidato
@@ -159,6 +160,13 @@
         .cred-cpf-input:focus {
             border-color: #006600; outline: none;
             box-shadow: 0 0 0 2px rgba(0,102,0,0.2);
+        }
+
+        .cred-nascimento-wrap {
+            display: inline-flex; align-items: center; gap: 4px; position: relative;
+        }
+        .cred-nascimento-picker-btn {
+            padding: 4px 7px; line-height: 1;
         }
 
         /* Header de grupo de seção (ex: Dados Pessoais) */
@@ -517,26 +525,6 @@
         const formContainer = document.createElement('div');
         formContainer.id = 'cred-form-container';
         formContainer.innerHTML = `
-            <div class="cred-section-group-header">Dados Pessoais</div>
-            <div class="cred-form-section">
-                <div class="cred-dados-row">
-                    <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-cpf">CPF</label>
-                        <input type="text" id="cred-cpf" class="cred-cpf-input"
-                               placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="nope">
-                    </div>
-                    <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-rg">RG</label>
-                        <input type="text" id="cred-rg" class="cred-cpf-input"
-                               placeholder="00.000.000-0" maxlength="14" inputmode="numeric" autocomplete="nope">
-                    </div>
-                    <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-nacionalidade">Nacionalidade</label>
-                        <input type="text" id="cred-nacionalidade" class="cred-cpf-input"
-                               value="brasileira" autocomplete="nope">
-                    </div>
-                </div>
-            </div>
             <div class="cred-form-section">
                 <label class="cred-section-label">Estado civil</label>
                 <div class="cred-btn-group" id="cred-estadocivil-group">
@@ -632,6 +620,38 @@
                     <button class="btn btn-mini cred-toggle-btn" data-regiao="5"><i class="icon-check-empty"></i> 5 – Zona Rural</button>
                 </div>
             </div>
+            <div class="cred-section-group-header">Dados Pessoais</div>
+            <div class="cred-form-section">
+                <div class="cred-dados-row">
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-cpf">CPF</label>
+                        <input type="text" id="cred-cpf" class="cred-cpf-input"
+                               placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="nope">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-rg">RG</label>
+                        <input type="text" id="cred-rg" class="cred-cpf-input"
+                               placeholder="00.000.000-0" maxlength="14" inputmode="numeric" autocomplete="nope">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-nacionalidade">Nacionalidade</label>
+                        <input type="text" id="cred-nacionalidade" class="cred-cpf-input"
+                               value="brasileira" autocomplete="nope">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-nascimento">Data de Nascimento</label>
+                        <div class="cred-nascimento-wrap">
+                            <input type="text" id="cred-nascimento" class="cred-cpf-input"
+                                   placeholder="DD/MM/AAAA" maxlength="10" inputmode="numeric" autocomplete="nope"
+                                   style="width: 110px;">
+                            <button type="button" id="cred-nascimento-picker-btn" class="btn btn-mini cred-nascimento-picker-btn" title="Selecionar data">
+                                <i class="icon-calendar"></i>
+                            </button>
+                            <input type="date" id="cred-nascimento-date" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;">
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
         return formContainer;
     }
@@ -711,6 +731,68 @@
         const nacEl = document.getElementById('cred-nacionalidade');
         if (nacEl) {
             nacEl.addEventListener('input', (e) => { nacionalidade = e.target.value; });
+        }
+
+        // Data de Nascimento — máscara DD/MM/AAAA + date picker
+        const nascEl = document.getElementById('cred-nascimento');
+        const nascDateEl = document.getElementById('cred-nascimento-date');
+        const nascPickerBtn = document.getElementById('cred-nascimento-picker-btn');
+        if (nascEl) {
+            nascEl.addEventListener('input', (e) => {
+                let digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+
+                // Clamp DD: primeiro dígito > 3 → prefixar com 0
+                if (digits.length >= 1 && digits[0] > '3') digits = '0' + digits.slice(0, 7);
+                // Clamp DD: dois dígitos, valor 00 ou > 31 → truncar para um dígito
+                if (digits.length >= 2) {
+                    const dd = parseInt(digits.slice(0, 2), 10);
+                    if (dd === 0 || dd > 31) digits = digits.slice(0, 1);
+                }
+
+                // Clamp MM: primeiro dígito do mês > 1 → prefixar com 0
+                if (digits.length >= 3 && digits[2] > '1') digits = digits.slice(0, 2) + '0' + digits.slice(2, 7);
+                // Clamp MM: dois dígitos do mês, valor 00 ou > 12 → truncar para um dígito do mês
+                if (digits.length >= 4) {
+                    const mm = parseInt(digits.slice(2, 4), 10);
+                    if (mm === 0 || mm > 12) digits = digits.slice(0, 3);
+                }
+
+                let fmt = digits;
+                if (digits.length > 4)      fmt = digits.slice(0,2)+'/'+digits.slice(2,4)+'/'+digits.slice(4);
+                else if (digits.length > 2) fmt = digits.slice(0,2)+'/'+digits.slice(2);
+                e.target.value = fmt;
+
+                // Só considera preenchido quando DD/MM/AAAA está completo, é uma data válida e a pessoa tem ≥ 18 anos
+                if (digits.length === 8) {
+                    const d = parseInt(digits.slice(0,2),10), m = parseInt(digits.slice(2,4),10), a = parseInt(digits.slice(4,8),10);
+                    const dt = new Date(a, m-1, d);
+                    const dataOk = dt.getFullYear()===a && dt.getMonth()===m-1 && dt.getDate()===d;
+                    const dezoitoAnos = new Date(a+18, m-1, d);
+                    dataNascimento = (dataOk && dezoitoAnos <= new Date()) ? fmt : '';
+                } else {
+                    dataNascimento = '';
+                }
+                agendarSalvarProgresso();
+            });
+        }
+        if (nascPickerBtn && nascDateEl && nascEl) {
+            nascPickerBtn.addEventListener('click', () => {
+                // Pré-preencher o input[type=date] com o valor atual (AAAA-MM-DD)
+                const parts = nascEl.value.split('/');
+                if (parts.length === 3 && parts[2].length === 4) {
+                    nascDateEl.value = parts[2]+'-'+parts[1]+'-'+parts[0];
+                }
+                nascDateEl.showPicker ? nascDateEl.showPicker() : nascDateEl.click();
+            });
+            nascDateEl.addEventListener('change', (e) => {
+                const iso = e.target.value; // AAAA-MM-DD
+                if (!iso) return;
+                const [a, m, d] = iso.split('-');
+                const fmt = d+'/'+m+'/'+a;
+                nascEl.value = fmt;
+                dataNascimento = fmt;
+                agendarSalvarProgresso();
+            });
         }
 
         // Estado civil — seleção única com toggle
@@ -906,6 +988,7 @@
                 }
 
                 moverFichaInscricao(modal, modalBody, formContainer);
+                moverDocIdentidade(modal, formContainer);
                 injetarOutrosAnexos(modal);
                 injetarBotoesCategorias(modal);
             }
@@ -992,6 +1075,9 @@
 
         // --- Mover Ficha de Inscrição para posição de destaque ---
         moverFichaInscricao(modal, modalBody, formContainer);
+
+        // --- Mover doc de identidade (II) para dentro de Dados Pessoais ---
+        moverDocIdentidade(modal, formContainer);
 
         // --- Injetar "Outros documentos anexos" ---
         injetarOutrosAnexos(modal);
@@ -1110,6 +1196,52 @@
 
         // Inserir acima do formulário
         modalBody.insertBefore(fichaContainer, formContainer);
+    }
+
+    function moverDocIdentidade(modal, formContainer) {
+        const tabelaPrincipal = modal.querySelector('.div_lista_aprovacao_anexos > table > tbody');
+        if (!tabelaPrincipal) return;
+
+        let docRow = null;
+        for (const tr of tabelaPrincipal.querySelectorAll(':scope > tr')) {
+            const td = tr.querySelector('td');
+            if (td && /^II\s*[-–]/i.test(td.textContent.trim())) {
+                docRow = tr;
+                break;
+            }
+        }
+        if (!docRow) return;
+
+        const innerTable = docRow.querySelector('table');
+        if (!innerTable) return;
+
+        innerTable.querySelectorAll('td.menor > a[target="_blank"]').forEach(link => {
+            const nome = link.textContent.trim();
+            link.setAttribute('title', nome);
+            link.innerHTML = `<span class="cred-truncate">${nome}</span>`;
+        });
+
+        const labelTd = docRow.querySelector('td');
+        const label = document.createElement('label');
+        label.className = 'cred-section-label';
+        label.innerHTML = labelTd ? labelTd.innerHTML.trim() : 'II – Documento de Identidade';
+
+        const docContainer = document.createElement('div');
+        docContainer.id = 'cred-doc-identidade';
+        docContainer.className = 'cred-ficha-section';
+        docContainer.appendChild(label);
+        adicionarColunaStatusNaTabela(innerTable, 'II');
+        docContainer.appendChild(innerTable);
+
+        docRow.remove();
+
+        // Inserir imediatamente após o cabeçalho "Dados Pessoais", antes dos campos CPF/RG/Nacionalidade
+        const header = formContainer.querySelector('.cred-section-group-header');
+        if (header && header.nextSibling) {
+            formContainer.insertBefore(docContainer, header.nextSibling);
+        } else {
+            formContainer.appendChild(docContainer);
+        }
     }
 
     /**
@@ -1289,6 +1421,7 @@
             if (!td) continue;
             const match = td.textContent.trim().match(ROMANA_RE);
             if (!match) continue; // Sem algarismo romano → pular
+            if (match[1] === 'II') continue; // Tratado por moverDocIdentidade
 
             adicionarColunaStatusNaTabela(tr.querySelector('table'), match[1]);
         }
@@ -1384,6 +1517,7 @@
         cpfDigitos = '';
         rgDigitos = '';
         nacionalidade = 'brasileira';
+        dataNascimento = '';
         estadoCivil = '';
         celularDigitos = '';
         email = '';
@@ -1413,6 +1547,8 @@
         if (cpfEl) cpfEl.value = '';
         if (rgEl) rgEl.value = '';
         if (nacEl) nacEl.value = 'brasileira';
+        const nascElReset = document.getElementById('cred-nascimento');
+        if (nascElReset) nascElReset.value = '';
         if (celularEl) celularEl.value = '';
         if (emailEl) emailEl.value = '';
         if (cepEl) cepEl.value = '';
@@ -1528,11 +1664,16 @@
         const dados = {
             ts: Date.now(),
             concluido: concluido,
-            candidato: nomeEl ? nomeEl.value : '',
+            protocolo:  dadosExtraidos.protocolo,
+            url:        dadosExtraidos.url        || '',
+            dataEnvio:  dadosExtraidos.dataEnvio  || '',
+            cicloAtual: cicloAtual,
+            candidato: nomeEl ? nomeEl.value : (dadosExtraidos.candidato || ''),
             nomeConfirmado: nomeConfEl ? nomeConfEl.checked : false,
             cpf: cpfDigitos,
             rg: rgDigitos,
             nacionalidade: nacionalidade,
+            dataNascimento: dataNascimento,
             estadoCivil: estadoCivil,
             celular: celularDigitos,
             email: email,
@@ -1633,10 +1774,22 @@
     function restaurarProgresso(dados) {
         if (!dados) return;
 
+        // --- Reconstruir dadosExtraidos e cicloAtual (nunca eram persistidos) ---
+        if (dados.protocolo) {
+            dadosExtraidos = {
+                protocolo: dados.protocolo,
+                url:       dados.url       || '',
+                candidato: dados.candidato || '',
+                dataEnvio: dados.dataEnvio || '',
+            };
+        }
+        if (dados.cicloAtual) cicloAtual = dados.cicloAtual;
+
         // --- Variáveis JS (só sobrescreve se valor salvo não for vazio) ---
         if (dados.cpf)            cpfDigitos = dados.cpf;
         if (dados.rg)             rgDigitos = dados.rg;
         if (dados.nacionalidade)  nacionalidade = dados.nacionalidade;
+        if (dados.dataNascimento) dataNascimento = dados.dataNascimento;
         if (dados.estadoCivil)    estadoCivil = dados.estadoCivil;
         if (dados.celular)        celularDigitos = dados.celular;
         if (dados.email)          email = dados.email;
@@ -1678,6 +1831,7 @@
             setVal('cred-rg', fmt);
         }
         setVal('cred-nacionalidade', nacionalidade);
+        if (dataNascimento) setVal('cred-nascimento', dataNascimento);
         if (celularDigitos) setVal('cred-celular', formatarCelular(celularDigitos));
         setVal('cred-email', email);
         if (cep) setVal('cred-cep', cep.length > 5 ? cep.slice(0,5)+'-'+cep.slice(5) : cep);
@@ -1882,6 +2036,10 @@
             const candidato = extrairNomeCandidato();
             const dataEnvio = extrairDataEnvio();
 
+            // Calcular ciclo sempre — independente de autoMarcador — para preencher coluna AS.
+            // O segundo parâmetro controla se o marcador no select2 é efetivamente aplicado.
+            aplicarMarcadorCiclo(dataEnvio, autoMarcador);
+
             if (autoMarcador) {
                 const membroExistente = credenciadorJaAplicado();
                 if (membroExistente) {
@@ -1896,7 +2054,6 @@
                 } else {
                     trocarMarcador(credenciadoraSalva);
                 }
-                aplicarMarcadorCiclo(dataEnvio);
             }
 
             dadosExtraidos = { protocolo, url, candidato, dataEnvio };
@@ -2147,14 +2304,18 @@
         if (concluido) {
             btnExecutar.disabled = true;
             try {
-                await copiarParaPlanilha();
-                window.open(PLANILHA_URL, 'cred-planilha');
+                // Gravar clipboard de forma síncrona (antes de qualquer await) para garantir
+                // que o gesto do usuário ainda está ativo na call stack.
+                const dados = prepararDadosClipboard();
+                escreverClipboardSync(dados);
             } catch (error) {
-                console.error('Erro ao copiar dados:', error);
-                alert('Erro ao copiar dados para a área de transferência.');
-            } finally {
+                console.error('[credenciamento] Erro ao copiar dados:', error);
+                alert('Erro ao copiar para a área de transferência.\n\n' + error.message);
                 btnExecutar.disabled = false;
+                return; // não abrir planilha se a cópia falhou
             }
+            btnExecutar.disabled = false;
+            window.open(PLANILHA_URL, 'cred-planilha');
             return;
         }
 
@@ -2299,20 +2460,17 @@
         document.getElementById('cred-dialog-verificar-ok').addEventListener('click', () => overlay.remove());
     }
 
-    async function copiarParaPlanilha() {
+    function prepararDadosClipboard() {
         const { dataEnvio, protocolo, url } = dadosExtraidos;
         const candidato = document.getElementById('cred-nome-input').value.trim() || dadosExtraidos.candidato;
 
-        // Funções: mapeamento interno → planilha
         const mapFuncoes = { 'Ed. Básica': 'Educação Básica', 'Ed. Física': 'Educação Física', 'Artes': 'Artes' };
         const colF = funcoesSelecionadas.includes('Ed. Básica') ? mapFuncoes['Ed. Básica'] : '';
         const colG = funcoesSelecionadas.includes('Ed. Física') ? mapFuncoes['Ed. Física'] : '';
         const colH = funcoesSelecionadas.includes('Artes')      ? mapFuncoes['Artes']      : '';
 
-        // Regiões: número se selecionado, vazio se não
         const colRegioes = [1, 2, 3, 4, 5].map(n => regioesSelecionadas.includes(n) ? String(n) : '');
 
-        // Documentos: true→"sim", false→"não", ausente→""
         const catsDocs = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI'];
         const colDocs = catsDocs.map(cat => {
             if (avaliacoesDocs[cat] === true)  return 'sim';
@@ -2320,57 +2478,94 @@
             return '';
         });
 
-        // Resultado: inabilitado se algum false, habilitado se todos avaliados são true
-        const valores = Object.values(avaliacoesDocs);
-        const resultado = valores.includes(false) ? 'inabilitado' : 'habilitado';
+        const resultado = Object.values(avaliacoesDocs).includes(false) ? 'inabilitado' : 'habilitado';
 
-        // Montar array de 40 posições (0–39) → colunas A–AN
+        const motivoInabilitacao = catsDocs
+            .filter(cat => avaliacoesDocs[cat] === false)
+            .join(', ');
+
         const cells = [
-            dataEnvio,              // 0  A
-            protocolo,              // 1  B (texto no plain, hyperlink no html)
-            credenciadoraSalva,     // 2  C
-            candidato,              // 3  D
-            cpfDigitos,             // 4  E
-            rgDigitos,              // 5  F
-            nacionalidade,          // 6  G
-            estadoCivil,            // 7  H
-            '',                     // 8  I  — Etnia (campo reservado)
-            cep,                    // 9  J
-            logradouro,             // 10 K
-            numero,                 // 11 L
-            bairro,                 // 12 M
-            cidade,                 // 13 N
-            email,                  // 14 O
-            celularDigitos,         // 15 P
-            bancoNome,              // 16 Q
-            chavePix,               // 17 R
-            pisDigitos,             // 18 S  — PIS/PASEP/NIT/NIS
-            colF,                   // 19 T  — Educação Básica
-            colG,                   // 20 U  — Educação Física
-            colH,                   // 21 V  — Artes
-            ...colRegioes,          // 22–26 W–AA (5 regiões)
-            ...colDocs,             // 27–37 AB–AL (XI docs = 11 cols)
-            resultado,              // 38 AM
-            cicloAtual              // 39 AN
+            credenciadoraSalva,     // 0  A  — Analisado por
+            dataEnvio,              // 1  B  — Data e hora
+            resultado,              // 2  C  — Resultado
+            candidato,              // 3  D  — Nome do professor
+            protocolo,              // 4  E  — Protocolo 1Doc (texto no plain, hyperlink no html)
+            motivoInabilitacao,     // 5  F  — Motivo da inabilitação (ex: "VI, X")
+            cpfDigitos,             // 6  G  — CPF
+            rgDigitos,              // 7  H  — RG
+            nacionalidade,          // 8  I  — Nacionalidade
+            dataNascimento,         // 9  J  — Data de Nascimento
+            estadoCivil,            // 10 K  — Estado Civil
+            '',                     // 11 L  — Etnia (reservado)
+            cep,                    // 12 M  — CEP
+            logradouro,             // 13 N  — Logradouro
+            numero,                 // 14 O  — Número
+            bairro,                 // 15 P  — Bairro
+            cidade,                 // 16 Q  — Cidade
+            email,                  // 17 R  — E-mail
+            celularDigitos,         // 18 S  — Celular
+            bancoNome,              // 19 T  — Banco
+            chavePix,               // 20 U  — Chave Pix
+            '',                     // 21 V  — Agência Santander (reservado)
+            '',                     // 22 W  — Conta Corrente (reservado)
+            '',                     // 23 X  — Nome no Banco (reservado)
+            pisDigitos,             // 24 Y  — PIS/PASEP/NIT/NIS
+            colF,                   // 25 Z  — Educação Básica
+            colG,                   // 26 AA — Educação Física
+            colH,                   // 27 AB — Artes
+            ...colRegioes,          // 28–32 AC–AG (5 regiões)
+            ...colDocs,             // 33–43 AH–AR (XI docs = 11 cols)
+            cicloAtual,             // 44 AS — Ciclo
         ];
 
-        // text/plain: tabs separando valores, protocolo sem URL
         const textData = cells.join('\t');
 
-        // text/html: tabela para o Google Planilhas, protocolo como hyperlink
         const htmlCells = cells.map((val, i) => {
-            if (i === 1 && url) return `<td><a href="${url}">${val}</a></td>`;
-            return `<td>${val}</td>`;
+            if (i === 4 && url) return `<td><a href="${url}">${val}</a></td>`;
+            return `<td>${escapeHtml(val)}</td>`;
         }).join('');
-        const htmlData = `<table><tr>${htmlCells}</tr></table>`;
+        const htmlData = `<!DOCTYPE html><html><body><table><tr>${htmlCells}</tr></table></body></html>`;
 
-        const blobHtml = new Blob([htmlData], { type: 'text/html' });
-        const blobText = new Blob([textData], { type: 'text/plain' });
+        return { textData, htmlData };
+    }
 
-        await navigator.clipboard.write([new ClipboardItem({
-            'text/html': blobHtml,
-            'text/plain': blobText
-        })]);
+    // Gravação síncrona via execCommand — deve ser chamada antes de qualquer await
+    // para que o gesto do usuário ainda esteja ativo no stack de chamada.
+    function escreverClipboardSync(dados) {
+        const ta = document.createElement('textarea');
+        ta.value = dados.textData;
+        ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+    }
+
+    async function copiarParaPlanilha() {
+        const dados = prepararDadosClipboard();
+
+        // Tentar navigator.clipboard.write (requer foco + gesto do usuário)
+        let clipboardOk = false;
+        try {
+            await navigator.clipboard.write([new ClipboardItem({
+                'text/html':  new Blob([dados.htmlData], { type: 'text/html' }),
+                'text/plain': new Blob([dados.textData], { type: 'text/plain' }),
+            })]);
+            clipboardOk = true;
+        } catch (_) { /* sem foco ou permissão — cai para execCommand */ }
+
+        if (!clipboardOk) {
+            escreverClipboardSync(dados);
+        }
+    }
+
+    function escapeHtml(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     /**
@@ -2441,11 +2636,10 @@
     }
 
     /**
-     * Calcula o ciclo do protocolo com base em dataEnvio ("DD/MM/YYYY HH:MM") e
-     * aplica o marcador correspondente ("— 01" a "— 10") no select2 #marcadores_ids.
-     * Só altera o select2 se o marcador correto ainda não estiver selecionado.
+     * Calcula o ciclo do protocolo com base em dataEnvio ("DD/MM/YYYY HH:MM"),
+     * seta cicloAtual e (se aplicarMarcador=true) aplica o marcador no select2 #marcadores_ids.
      */
-    function aplicarMarcadorCiclo(dataEnvio) {
+    function aplicarMarcadorCiclo(dataEnvio, aplicarMarcador = true) {
         if (!dataEnvio) return;
 
         const partes = dataEnvio.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
@@ -2474,6 +2668,7 @@
         }
 
         cicloAtual = novoCiclo;
+        if (!aplicarMarcador) return;
         const todosCiclos = ['01','02','03','04','05','06','07','08','09','10'];
         const script = document.createElement('script');
         script.textContent = `
@@ -2602,6 +2797,17 @@
         const btnEnviar = e.target.closest('#enviar_documento');
         if (!btnEnviar) return;
 
+        // Gravar clipboard IMEDIATAMENTE, antes de qualquer await.
+        // O execCommand('copy') exige que o gesto do usuário ainda esteja ativo na call stack.
+        // Qualquer await (mesmo aguardarElemento) descarta esse contexto de gesto.
+        let dadosClipboard = null;
+        try {
+            dadosClipboard = prepararDadosClipboard();
+            escreverClipboardSync(dadosClipboard);
+        } catch (err) {
+            console.error('[credenciamento] Erro ao preparar clipboard:', err);
+        }
+
         // Aguardar o dialog de confirmação nativo (#sim) aparecer
         const btnSim = await aguardarElemento('#sim', 8000);
         if (!btnSim) {
@@ -2617,13 +2823,6 @@
         if (_deveAplicarMarcadoresResposta) {
             aplicarMarcadorResultado('Conferido');
             await new Promise(r => setTimeout(r, 200));
-        }
-
-        // Copiar dados do candidato para o clipboard
-        try {
-            await copiarParaPlanilha();
-        } catch (err) {
-            console.error('[credenciamento] Erro ao copiar para o clipboard:', err);
         }
 
         // Confirmar o envio da resposta
