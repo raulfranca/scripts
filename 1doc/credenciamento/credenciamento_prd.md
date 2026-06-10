@@ -9,7 +9,7 @@
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js`
-**Versão atual:** `0.6.0`
+**Versão atual:** `0.6.1`
 
 > **Versionamento:** este campo reflete o que está publicado (branch `main`). Alterado somente mediante instrução explícita do usuário — nunca por iniciativa do agente de IA.
 
@@ -294,7 +294,7 @@ Um listener em `document.body` (capture phase) intercepta o clique em `#enviar_d
 **Domínio (`@match`):** `https://pindamonhangaba.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/inbox.user.js`
-**Versão atual:** `0.6.0`
+**Versão atual:** `0.6.1`
 
 ---
 

@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      0.6.0
+// @version      0.6.1
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -2521,7 +2521,7 @@
         const textData = cells.join('\t');
 
         const htmlCells = cells.map((val, i) => {
-            if (i === 4 && url) return `<td><a href="${url}">${val}</a></td>`;
+            if (i === 4 && url) return `<td><a href="${escapeHtml(url)}">${escapeHtml(val)}</a></td>`;
             return `<td>${escapeHtml(val)}</td>`;
         }).join('');
         const htmlData = `<!DOCTYPE html><html><body><table><tr>${htmlCells}</tr></table></body></html>`;
@@ -2531,15 +2531,29 @@
 
     // Gravação síncrona via execCommand — deve ser chamada antes de qualquer await
     // para que o gesto do usuário ainda esteja ativo no stack de chamada.
+    // Usa um listener 'copy' para injetar AMBOS os formatos (text/html e text/plain),
+    // preservando o hyperlink do protocolo ao colar na planilha. Copiar apenas
+    // texto via <textarea> perderia o rich text.
     function escreverClipboardSync(dados) {
-        const ta = document.createElement('textarea');
-        ta.value = dados.textData;
-        ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
-        document.body.appendChild(ta);
-        ta.focus();
-        ta.select();
-        document.execCommand('copy');
-        ta.remove();
+        const onCopy = (e) => {
+            e.clipboardData.setData('text/html', dados.htmlData);
+            e.clipboardData.setData('text/plain', dados.textData);
+            e.preventDefault();
+        };
+        document.addEventListener('copy', onCopy);
+        try {
+            // Precisa existir uma seleção não-vazia para o execCommand('copy') disparar.
+            const ta = document.createElement('textarea');
+            ta.value = dados.textData;
+            ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            document.execCommand('copy');
+            ta.remove();
+        } finally {
+            document.removeEventListener('copy', onCopy);
+        }
     }
 
     async function copiarParaPlanilha() {

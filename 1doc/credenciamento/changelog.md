@@ -11,6 +11,12 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+## [0.6.1] — 2026-06-10
+
+### Corrigido — credenciamento
+
+- **Hyperlink do protocolo perdido ao colar na planilha (`prepararDadosClipboard` / `escreverClipboardSync`):** a coluna E (protocolo) não chegava em rich text com link clicável no Google Sheets em dois cenários: (1) o fallback síncrono `escreverClipboardSync` copiava apenas `text/plain` via `<textarea>`, descartando o `text/html` com o `<a href>`; agora usa um listener `copy` que injeta ambos os formatos (`text/html` + `text/plain`) via `clipboardData`. (2) A URL do protocolo (`window.location.href`, que contém `&hash=...`) não era escapada no atributo `href`, gerando HTML inválido; agora passa por `escapeHtml(url)`.
+
 ### Alterado — credenciamento
 
 - **Reordenação da seção "Dados Pessoais" no formulário:** o bloco CPF/RG/Nacionalidade foi movido para o final do formulário, imediatamente após "Regiões Escolares" e antes da seção de documentos. O restante dos campos (Estado civil, Endereço, E-mail/Celular, Banco/Pix/PIS, Função pretendida, Regiões Escolares) permanece na mesma ordem.

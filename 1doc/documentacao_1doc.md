@@ -319,6 +319,36 @@ const htmlCells = cells.map((val, i) =>
 ).join('');
 const htmlData = `<table><tr>${htmlCells}</tr></table>`;
 ```
+
+> **Hyperlink: escapar a URL e injetar HTML no fallback.** Dois cuidados garantem que o link clicável sobreviva à colagem no Sheets:
+> 1. **Escapar a URL no `href`.** A URL do protocolo é `window.location.href` e contém `&` (ex: `?pg=doc/ver&hash=...`). Sem `escapeHtml(url)` no atributo `href`, o `&hash` quebra o HTML e o Sheets ignora o link. Aplicar `escapeHtml` tanto no `href` quanto no texto: `<a href="${escapeHtml(url)}">${escapeHtml(val)}</a>`.
+> 2. **O fallback síncrono também precisa do `text/html`.** Quando `navigator.clipboard.write` falha (sem foco/permissão) e cai para `execCommand('copy')`, copiar via `<textarea>` grava **apenas `text/plain`** — o rich text some. A solução é registrar um listener `copy` que injeta os dois formatos antes do `execCommand`:
+>
+> ```javascript
+> function escreverClipboardSync(dados) {
+>     const onCopy = (e) => {
+>         e.clipboardData.setData('text/html', dados.htmlData);
+>         e.clipboardData.setData('text/plain', dados.textData);
+>         e.preventDefault();
+>     };
+>     document.addEventListener('copy', onCopy);
+>     try {
+>         // execCommand('copy') exige uma seleção não-vazia para disparar o evento.
+>         const ta = document.createElement('textarea');
+>         ta.value = dados.textData;
+>         ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0';
+>         document.body.appendChild(ta);
+>         ta.focus(); ta.select();
+>         document.execCommand('copy');
+>         ta.remove();
+>     } finally {
+>         document.removeEventListener('copy', onCopy);
+>     }
+> }
+> ```
+>
+> O `<textarea>` selecionado serve apenas para fazer o `execCommand('copy')` disparar o evento `copy`; o conteúdo real (html + plain) vem do listener via `clipboardData`.
+
 ### 5.5 Automação de Modais (Interceptação Rápida)
 Quando o script clica em um botão nativo (como Arquivar ou Enviar resposta), o 1Doc abre um modal com animação. Use este snippet para interceptar e confirmar o modal invisivelmente:
 
