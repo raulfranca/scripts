@@ -85,9 +85,9 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
       * Ao sair do campo CEP (`blur`), se tiver 8 dígitos, o script faz um `fetch` para `https://viacep.com.br/ws/{CEP}/json/` e preenche automaticamente Logradouro, Bairro e Cidade. Número permanece vazio para preenchimento manual. Se a resposta contiver `erro: true` ou a requisição falhar, exibe `.cred-alert-erro` na seção. Todos os campos permanecem editáveis.
     * **Celular** — input com máscara progressiva; 10 dígitos → `(00) 0000-0000`; 11 dígitos → `(00) 00000-0000`. Armazena só dígitos em `celularDigitos`. **Extração automática:** se `.media-body .media-text .ind_tel` existir na primeira mensagem do protocolo, o campo é preenchido automaticamente. Campo sempre editável.
     * **E-mail** — input de texto. **Extração automática:** o texto direto de `.media-body .media-text` (excluindo `<span>` filhos como `.ind_tel` e `.ind_documento`) é usado se contiver um e-mail válido. Campo sempre editável. **Validação de formato** ao copiar: o regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` é aplicado; campo é **opcional**, mas se preenchido precisa ser válido.
-    * **Dados da Conta Santander** — subseção com título no padrão de "Endereço" (`label.cred-section-label`). Contém dois campos obrigatórios, ambos gravados como **texto** para preservar zeros à esquerda:
-      * **Agência** (`cred-agencia` → `agenciaSantander`): apenas dígitos, **exatamente 4**. O script **não presume zeros** — se o usuário digitar `56`, o valor permanece `56` (inválido na conclusão), nunca vira `0056` nem `5600`.
-      * **Conta** (`cred-conta` → `contaSantander`): máscara `XXXXXXXX-X` (8 dígitos + 1 verificador = 9). Caso especial de digitação: se já houver 9 dígitos com zeros à esquerda e o usuário continuar digitando, os zeros à esquerda são descartados um a um para acomodar os novos dígitos.
+    * **Dados da Conta Santander** — subseção com título no padrão de "Endereço" (`label.cred-section-label`). Contém dois campos **opcionais** (é possível concluir com ambos vazios), ambos gravados como **texto** para preservar zeros à esquerda. Quando preenchidos, precisam estar completos:
+      * **Agência** (`cred-agencia` → `agenciaSantander`): apenas dígitos, **exatamente 4** (ou vazio). O script **não presume zeros** — se o usuário digitar `56`, o valor permanece `56` (inválido na conclusão), nunca vira `0056` nem `5600`.
+      * **Conta** (`cred-conta` → `contaSantander`): máscara `XXXXXXXX-X` (8 dígitos + 1 verificador = 9, ou vazio). Caso especial de digitação: se já houver 9 dígitos com zeros à esquerda e o usuário continuar digitando, os zeros à esquerda são descartados um a um para acomodar os novos dígitos.
     * **PIS/PASEP/NIT/NIS** — o campo de digitação do número (`cred-pis` → `pisDigitos`, máscara `000.00000.00-0`, 11 dígitos) **não fica na subseção bancária**: é movido por `moverDocPIS` para uma seção destacada junto ao anexo da categoria **VI** ("Cópia da inscrição do PIS ou PASEP ou NIT"), da mesma forma que CPF/RG aparecem sob o anexo de identidade (II). A seção `#cred-doc-pis` contém o anexo, os botões Sim/Não da revisão da categoria VI e, abaixo, o campo do número.
   * **Função pretendida** — 3 botões, **múltipla seleção** (toggle): Educação Básica (verde institucional), Educação Física (vermelho), Artes (laranja). Botões inativos com `opacity: 0.35`; ativo com `opacity: 1` e leve escala.
   * **Regiões Escolares** — 5 botões, múltipla seleção (toggle): 1-Centro (amarelo), 2-Zona Oeste (verde institucional), 3-Zona Leste (vermelho), 4-Moreira César (verde), 5-Zona Rural (roxo).
@@ -121,7 +121,7 @@ O script deve ler o DOM da página do 1Doc para localizar:
 
 ### 3.3. Estado por Candidato (Persistido via localStorage)
 
-> **Princípio fundamental:** Todo campo de texto preenchido pelo credenciador e todo par de botões Sim/Não são **obrigatórios**. Não é possível concluir ("Concluir e copiar") sem que todos estejam preenchidos — o script valida e exibe mensagem de erro especificando o campo pendente. Adicionalmente, todos esses campos são **persistidos no `localStorage`** e restaurados automaticamente ao reabrir o modal para o mesmo protocolo. Este princípio se aplica a todos os campos já existentes e a qualquer campo adicionado no futuro.
+> **Princípio fundamental:** Todo campo de texto preenchido pelo credenciador e todo par de botões Sim/Não são **obrigatórios**, salvo exceções explicitamente marcadas como opcionais (atualmente: **Agência** e **Conta** Santander). Não é possível concluir ("Concluir e copiar") sem que todos os campos obrigatórios estejam preenchidos — o script valida e exibe mensagem de erro especificando o campo pendente. Campos opcionais, quando preenchidos, ainda precisam ser válidos. Adicionalmente, todos esses campos são **persistidos no `localStorage`** e restaurados automaticamente ao reabrir o modal para o mesmo protocolo. Este princípio se aplica a todos os campos já existentes e a qualquer campo adicionado no futuro.
 
 Os campos preenchidos pelo usuário são **salvos automaticamente** no `localStorage` a cada alteração (debounce de 300ms), usando o número do protocolo como chave (`1doc_cred_progresso_{protocolo}`). Ao reabrir o modal para o mesmo protocolo, o script restaura automaticamente os dados salvos, exibindo um toast informativo "Progresso restaurado automaticamente" com botão "Descartar". O progresso é **mantido** no `localStorage` após cópia bem-sucedida (não é removido). Entradas com mais de 30 dias são limpas automaticamente na inicialização do script.
 
@@ -163,8 +163,8 @@ O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na de
 > 10. Cidade — não pode estar vazia.
 > 11. Celular — mínimo 10 dígitos.
 > 12. E-mail — obrigatório e deve passar no regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`.
-> 13. Agência Santander — exatamente 4 dígitos (zeros à esquerda contam; `56` é inválido).
-> 14. Conta Santander — 9 dígitos (8 + verificador).
+> 13. Agência Santander — **opcional**: vazia (pode concluir) ou exatamente 4 dígitos (zeros à esquerda contam; `56` é inválido).
+> 14. Conta Santander — **opcional**: vazia (pode concluir) ou 9 dígitos (8 + verificador).
 > 15. PIS/PASEP/NIT/NIS — 11 dígitos completos.
 > 16. Função pretendida — ao menos uma selecionada.
 > 17. Regiões Escolares — ao menos uma selecionada.

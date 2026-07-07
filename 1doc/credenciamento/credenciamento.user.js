@@ -1787,8 +1787,9 @@
         if (!cidade.trim()) return false;
         if (celularDigitos.length < 10) return false;
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
-        if (agenciaSantander.length !== 4) return false;
-        if (contaSantander.length !== 9) return false;
+        // Dados da conta Santander são opcionais; se preenchidos, precisam estar completos.
+        if (agenciaSantander.length !== 0 && agenciaSantander.length !== 4) return false;
+        if (contaSantander.length !== 0 && contaSantander.length !== 9) return false;
         if (pisDigitos.length !== 11) return false;
         if (funcoesSelecionadas.length === 0) return false;
         if (regioesSelecionadas.length === 0) return false;
@@ -2328,12 +2329,14 @@
             mostrarErroValidacao('cred-email', 'Preencha um e-mail válido.');
             return false;
         }
-        if (agenciaSantander.length !== 4) {
-            mostrarErroValidacao('cred-agencia', 'Preencha a agência Santander com exatamente 4 dígitos (mantenha os zeros à esquerda).');
+        // Dados da conta Santander são opcionais: pode-se concluir com ambos vazios.
+        // Se preenchidos, precisam estar completos (agência 4 dígitos; conta 9 dígitos).
+        if (agenciaSantander.length !== 0 && agenciaSantander.length !== 4) {
+            mostrarErroValidacao('cred-agencia', 'A agência Santander deve ter exatamente 4 dígitos (mantenha os zeros à esquerda) ou ficar em branco.');
             return false;
         }
-        if (contaSantander.length !== 9) {
-            mostrarErroValidacao('cred-conta', 'Preencha a conta Santander completa (8 dígitos + verificador).');
+        if (contaSantander.length !== 0 && contaSantander.length !== 9) {
+            mostrarErroValidacao('cred-conta', 'A conta Santander deve estar completa (8 dígitos + verificador) ou ficar em branco.');
             return false;
         }
         if (pisDigitos.length !== 11) {
