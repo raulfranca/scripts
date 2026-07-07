@@ -981,7 +981,7 @@
 
                 moverFichaInscricao(modal, modalBody, formContainer);
                 moverDocIdentidade(modal, formContainer);
-                moverDocPIS(modal, modalBody);
+                moverDocPIS(modal, modalBody, formContainer);
                 injetarOutrosAnexos(modal);
                 injetarBotoesCategorias(modal);
             }
@@ -1073,7 +1073,7 @@
         moverDocIdentidade(modal, formContainer);
 
         // --- Mover doc do PIS (VI) para seção destacada com o campo do número ---
-        moverDocPIS(modal, modalBody);
+        moverDocPIS(modal, modalBody, formContainer);
 
         // --- Injetar "Outros documentos anexos" ---
         injetarOutrosAnexos(modal);
@@ -1246,7 +1246,7 @@
      * logo abaixo, o campo de digitação do número do PIS/PASEP/NIT/NIS — análogo ao
      * doc de identidade (II) com os campos CPF/RG. O anexo é a fonte do dado digitado.
      */
-    function moverDocPIS(modal, modalBody) {
+    function moverDocPIS(modal, modalBody, formContainer) {
         const tabelaPrincipal = modal.querySelector('.div_lista_aprovacao_anexos > table > tbody');
         if (!tabelaPrincipal) return;
 
@@ -1311,12 +1311,18 @@
 
         docRow.remove();
 
-        // Inserir logo após a Ficha de Inscrição (que fica no topo do modalBody)
-        const ficha = modalBody.querySelector('#cred-ficha-inscricao');
-        if (ficha && ficha.nextSibling) {
-            modalBody.insertBefore(docContainer, ficha.nextSibling);
+        // Inserir logo abaixo da subseção II (doc de identidade), dentro de Dados Pessoais.
+        // Fallbacks: após a Ficha de Inscrição no topo do modalBody, ou no início do modalBody.
+        const docIdentidade = formContainer && formContainer.querySelector('#cred-doc-identidade');
+        if (docIdentidade) {
+            docIdentidade.parentNode.insertBefore(docContainer, docIdentidade.nextSibling);
         } else {
-            modalBody.insertBefore(docContainer, modalBody.firstChild);
+            const ficha = modalBody.querySelector('#cred-ficha-inscricao');
+            if (ficha && ficha.nextSibling) {
+                modalBody.insertBefore(docContainer, ficha.nextSibling);
+            } else {
+                modalBody.insertBefore(docContainer, modalBody.firstChild);
+            }
         }
     }
 
