@@ -152,7 +152,7 @@ O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na de
 
 > **Hierarquia de validação ao clicar em "Concluir e copiar":**
 > 1. Checkbox "Este nome é igual ao que está na ficha de inscrição" — deve estar marcado.
-> 2. CPF — 11 dígitos completos.
+> 2. CPF — 11 dígitos completos **e** válido pelos dois dígitos verificadores (algoritmo de dicasdeprogramacao.com.br; rejeita sequências de dígitos iguais). CPF inválido bloqueia a conclusão com a mensagem `"CPF inválido — verifique se houve erro de digitação."`. **Exceção:** `00000000000` (11 zeros) é aceito como CPF anulado deliberadamente — para quando o candidato não enviou o documento e o campo não pode ficar vazio.
 > 3. RG — mínimo 8 dígitos.
 > 4. Data de Nascimento — obrigatória; `dataNascimento` deve estar preenchida (data completa, válida e candidato ≥ 18 anos). Mensagem distingue campo em branco/incompleto de data inválida ou idade < 18.
 > 5. Estado civil — obrigatório selecionar uma opção.
@@ -213,7 +213,7 @@ A função `prepararDadosClipboard()` lê diretamente das variáveis de estado d
 | R | E-mail | Texto livre | `email` |
 | S | Celular | Só dígitos | `celularDigitos` |
 | T | Banco | **Literal fixo** `Santander` | — |
-| U | Chave Pix | **Sempre o CPF** (só dígitos) | `cpfDigitos` |
+| U | Chave Pix | CPF (só dígitos); **vazia se o CPF for anulado** (`00000000000`) | `cpfDigitos` |
 | V | Agência Santander | Texto (preserva zeros à esquerda; `mso-number-format` no HTML) | `agenciaSantander` |
 | W | Conta Santander | Texto (preserva zeros à esquerda; `mso-number-format` no HTML) | `contaSantander` |
 | X | Nome do titular da conta | = nome do candidato | `candidato` |
@@ -226,7 +226,7 @@ A função `prepararDadosClipboard()` lê diretamente das variáveis de estado d
 | AS | Ciclo | `'01'`–`'10'` ou vazio | `cicloAtual` (calculado por `aplicarMarcadorCiclo`) |
 
 Regras de transformação:
-* **Banco/Pix:** coluna T é sempre o literal `Santander`; coluna U é sempre o CPF do candidato (o campo "Chave Pix" foi removido do formulário).
+* **Banco/Pix:** coluna T é sempre o literal `Santander`; coluna U é o CPF do candidato (o campo "Chave Pix" foi removido do formulário), **exceto** quando o CPF foi anulado deliberadamente com 11 zeros (`00000000000`), caso em que a coluna U fica vazia.
 * **Agência/Conta:** gravadas como texto; as células V e W recebem `style="mso-number-format:'@'"` no `text/html` para o Google Sheets tratá-las como texto e não descartar zeros à esquerda.
 * **Funções:** Mapeamento explícito de rótulos internos (`Ed. Básica`→`Educação Básica`, `Ed. Física`→`Educação Física`, `Artes`→`Artes`).
 * **Regiões:** Número inteiro (1–5) se selecionado, vazio se não.

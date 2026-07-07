@@ -2225,6 +2225,36 @@
     }
 
     /**
+     * Valida um CPF pelos dois dígitos verificadores.
+     * Fonte do algoritmo: https://dicasdeprogramacao.com.br/algoritmo-para-validar-cpf/
+     * Recebe uma string só de dígitos (11 chars). Retorna true se o CPF for válido.
+     * Rejeita sequências de dígitos iguais (ex: 111.111.111-11), que passam no cálculo
+     * mas não são CPFs válidos.
+     */
+    function cpfValido(cpf) {
+        if (cpf.length !== 11) return false;
+        if (/^(\d)\1{10}$/.test(cpf)) return false; // todos os dígitos iguais
+
+        // Primeiro dígito verificador: soma dos 9 primeiros dígitos ponderados por 10..2.
+        let soma = 0;
+        for (let i = 0; i < 9; i++) {
+            soma += Number(cpf[i]) * (10 - i);
+        }
+        let resto = (soma * 10) % 11;
+        if (resto === 10) resto = 0;
+        if (resto !== Number(cpf[9])) return false;
+
+        // Segundo dígito verificador: soma dos 10 primeiros dígitos ponderados por 11..2.
+        soma = 0;
+        for (let i = 0; i < 10; i++) {
+            soma += Number(cpf[i]) * (11 - i);
+        }
+        resto = (soma * 10) % 11;
+        if (resto === 10) resto = 0;
+        return resto === Number(cpf[10]);
+    }
+
+    /**
      * Valida os campos obrigatórios antes de copiar.
      * Retorna true se tudo estiver OK; false e exibe o primeiro erro caso contrário.
      */
@@ -2244,6 +2274,11 @@
         }
         if (cpfDigitos.length !== 11) {
             mostrarErroValidacao('cred-cpf', 'Preencha o CPF completo do candidato (11 dígitos) antes de continuar.');
+            return false;
+        }
+        // Exceção: 11 zeros anulam deliberadamente o campo (candidato não enviou o documento).
+        if (cpfDigitos !== '00000000000' && !cpfValido(cpfDigitos)) {
+            mostrarErroValidacao('cred-cpf', 'CPF inválido — verifique se houve erro de digitação.');
             return false;
         }
         if (rgDigitos.length < 8 || (rgDigitos.length > 9 && rgDigitos !== cpfDigitos)) {
@@ -2566,6 +2601,9 @@
             .filter(cat => avaliacoesDocs[cat] === false)
             .join(', ');
 
+        // Chave Pix = CPF, exceto quando o CPF foi anulado deliberadamente com 11 zeros.
+        const chavePix = cpfDigitos === '00000000000' ? '' : cpfDigitos;
+
         const cells = [
             credenciadoraSalva,     // 0  A  — Analisado por
             dataEnvio,              // 1  B  — Data e hora
@@ -2587,7 +2625,7 @@
             email,                  // 17 R  — E-mail
             celularDigitos,         // 18 S  — Celular
             'Santander',            // 19 T  — Banco (sempre Santander)
-            cpfDigitos,             // 20 U  — Chave Pix (sempre o CPF)
+            chavePix,               // 20 U  — Chave Pix (= CPF; vazia se CPF anulado com 11 zeros)
             agenciaSantander,       // 21 V  — Agência Santander (texto, preserva zeros à esquerda)
             contaSantander,         // 22 W  — Conta Santander (texto, preserva zeros à esquerda)
             candidato,              // 23 X  — Nome do titular da conta (= nome do candidato)
