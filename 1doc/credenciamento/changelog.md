@@ -11,8 +11,17 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+### Adicionado — credenciamento
+
+- **Nova subseção "Dados da Conta Santander" no formulário:** substitui a antiga linha "Banco / Chave Pix / PIS". Contém os campos **Agência** e **Conta**, com título no mesmo padrão de "Endereço" (`label.cred-section-label` acima da linha de campos).
+  - **Agência** (`cred-agencia`, estado `agenciaSantander`): exige **exatamente 4 dígitos**, gravada como **texto** para preservar zeros à esquerda. Não presume zeros — `56` continua `56` (inválido), nunca vira `0056` nem `5600`.
+  - **Conta** (`cred-conta`, estado `contaSantander`): máscara `XXXXXXXX-X` (8 dígitos + verificador = 9), gravada como **texto**. Caso especial: ao exceder 9 dígitos com zeros à esquerda presentes, os zeros à esquerda são descartados para dar lugar aos novos dígitos.
+- **Campo PIS/PASEP/NIT/NIS movido para junto do anexo da categoria VI:** nova função `moverDocPIS` extrai a linha "VI – Cópia da inscrição do PIS..." da tabela nativa e a injeta como seção destacada `#cred-doc-pis` (com os botões Sim/Não da revisão e o campo de digitação do número logo abaixo do anexo), análogo ao doc de identidade (II) com CPF/RG. A categoria VI passa a ser pulada em `injetarBotoesCategorias`.
+
 ### Alterado — credenciamento
 
+- **Mapeamento do clipboard (colunas bancárias):** coluna T (Banco) agora grava sempre o literal `"Santander"` (não lê mais do formulário); coluna U (Chave Pix) grava sempre o CPF do candidato; coluna V passa a receber a **Agência** (`agenciaSantander`); coluna W passa a receber a **Conta** (`contaSantander`); coluna X passa a receber o **nome do candidato** (titular da conta). As colunas V e W recebem `mso-number-format:'@'` no HTML para o Google Sheets tratá-las como texto e preservar os zeros à esquerda.
+- **Removidos os campos "Banco" e "Chave Pix" do formulário** e as variáveis de estado `bancoNome`, `bancoCOMPE` e `chavePix`. O auto-preenchimento da Chave Pix a partir do CPF foi removido (o CPF vai direto para a coluna Pix no clipboard).
 - **Data de nascimento agora é campo obrigatório (`validarFormulario`):** ao clicar em "Concluir", o sistema impede a conclusão e exibe erro se a data de nascimento não estiver preenchida — mesmo comportamento dos demais campos obrigatórios. A validação foi inserida logo após a do RG (seguindo a ordem visual do formulário). A mensagem distingue os casos: campo em branco/incompleto (`"Preencha a data de nascimento do candidato (DD/MM/AAAA)."`) e data preenchida mas inválida ou candidato com menos de 18 anos (`"Data de nascimento inválida ou candidato com menos de 18 anos."`), já que `dataNascimento` fica vazio em ambos.
 
 ## [0.6.1] — 2026-06-10

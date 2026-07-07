@@ -42,9 +42,8 @@
     let numero = '';              // número do endereço (manual)
     let bairro = '';              // bairro preenchido pelo ViaCEP
     let cidade = '';              // cidade preenchida pelo ViaCEP
-    let bancoNome = '';           // nome do banco (campo de texto livre)
-    let bancoCOMPE = '';          // código COMPE (sempre vazio — campo de texto livre)
-    let chavePix = '';            // chave Pix (default: CPF formatado)
+    let agenciaSantander = '';    // agência Santander (texto, exatamente 4 dígitos — preserva zeros à esquerda)
+    let contaSantander = '';      // conta Santander (texto, 8 dígitos + verificador — preserva zeros à esquerda)
     let pisDigitos = '';          // apenas os dígitos do PIS/PASEP (11 chars)
     let avaliacoesDocs = {};      // { 'I': true, 'II': false, ... } — true=Sim, false=Não, ausente=não avaliado
     let concluido = false;        // true após "Concluir" — ativa modo congelado
@@ -583,22 +582,19 @@
                 </div>
             </div>
             <div class="cred-form-section">
+                <label class="cred-section-label">Dados da Conta Santander</label>
                 <div class="cred-dados-row">
                     <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-banco-input">Banco</label>
-                        <input type="text" id="cred-banco-input" class="cred-cpf-input"
-                               placeholder="Nome do banco..." autocomplete="nope" style="width: 220px;">
+                        <label class="cred-section-label" for="cred-agencia">Agência</label>
+                        <input type="text" id="cred-agencia" class="cred-cpf-input"
+                               placeholder="0000" maxlength="4" inputmode="numeric"
+                               autocomplete="nope" style="width: 90px;">
                     </div>
                     <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-chavepix">Chave Pix</label>
-                        <input type="text" id="cred-chavepix" class="cred-cpf-input"
-                               placeholder="CPF, e-mail, celular..." autocomplete="nope" style="width: 220px;">
-                    </div>
-                    <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-pis">PIS/PASEP/NIT/NIS</label>
-                        <input type="text" id="cred-pis" class="cred-cpf-input"
-                               placeholder="000.00000.00-0" maxlength="14" inputmode="numeric"
-                               autocomplete="nope" style="width: 160px;">
+                        <label class="cred-section-label" for="cred-conta">Conta</label>
+                        <input type="text" id="cred-conta" class="cred-cpf-input"
+                               placeholder="00000000-0" maxlength="10" inputmode="numeric"
+                               autocomplete="nope" style="width: 130px;">
                     </div>
                 </div>
             </div>
@@ -683,15 +679,6 @@
                 else if (digits.length > 3) fmt = digits.slice(0,3)+'.'+digits.slice(3);
                 e.target.value = fmt;
                 cpfDigitos = digits;
-                // Auto-preencher Chave Pix se ainda não foi editada manualmente ou bate com CPF anterior
-                const pixEl = document.getElementById('cred-chavepix');
-                if (pixEl) {
-                    const pixFmt = digits.length === 11
-                        ? digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6,9)+'-'+digits.slice(9)
-                        : '';
-                    pixEl.value = pixFmt;
-                    chavePix = digits.length === 11 ? digits : '';
-                }
             });
         }
 
@@ -932,28 +919,31 @@
         const cidadeEl = document.getElementById('cred-cidade');
         if (cidadeEl) cidadeEl.addEventListener('input', (e) => { cidade = e.target.value; });
 
-        // Chave Pix
-        const pixEl = document.getElementById('cred-chavepix');
-        if (pixEl) pixEl.addEventListener('input', (e) => { chavePix = e.target.value.replace(/\D/g, ''); });
-
-        // PIS/PASEP
-        const pisEl = document.getElementById('cred-pis');
-        if (pisEl) pisEl.addEventListener('input', (e) => {
-            const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
-            pisDigitos = digits;
-            let masked = digits;
-            if (digits.length > 10) masked = digits.slice(0,3) + '.' + digits.slice(3,8) + '.' + digits.slice(8,10) + '-' + digits.slice(10);
-            else if (digits.length > 8) masked = digits.slice(0,3) + '.' + digits.slice(3,8) + '.' + digits.slice(8);
-            else if (digits.length > 3) masked = digits.slice(0,3) + '.' + digits.slice(3,8);
-            else masked = digits;
-            e.target.value = masked;
+        // Agência Santander — exatamente 4 dígitos; preserva zeros à esquerda (guardado como texto).
+        // NÃO presume zeros: se o usuário digitar '56', fica '56' (inválido) — não vira '0056' nem '5600'.
+        const agenciaEl = document.getElementById('cred-agencia');
+        if (agenciaEl) agenciaEl.addEventListener('input', (e) => {
+            const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+            agenciaSantander = digits;
+            e.target.value = digits;
         });
 
-        // Banco — campo de texto simples
-        const bancoInput = document.getElementById('cred-banco-input');
-        if (bancoInput) {
-            bancoInput.addEventListener('input', (e) => { bancoNome = e.target.value; });
-        }
+        // Conta Santander — 8 dígitos + 1 verificador (9 no total), máscara XXXXXXXX-X.
+        // Caso especial: se já houver 9 dígitos, um zero à esquerda e o usuário continuar digitando,
+        // remove o zero à esquerda para dar lugar ao novo dígito (troca o pad por dígito real).
+        const contaEl = document.getElementById('cred-conta');
+        if (contaEl) contaEl.addEventListener('input', (e) => {
+            let digits = e.target.value.replace(/\D/g, '');
+            // Enquanto exceder 9 dígitos e houver zero à esquerda, descarta o zero à esquerda
+            while (digits.length > 9 && digits[0] === '0') digits = digits.slice(1);
+            // Se ainda exceder (sem mais zeros à esquerda para descartar), trunca no fim
+            digits = digits.slice(0, 9);
+            contaSantander = digits;
+            e.target.value = digits.length > 8 ? digits.slice(0, 8) + '-' + digits.slice(8) : digits;
+        });
+
+        // PIS/PASEP — o listener é registrado em moverDocPIS, pois o input é criado
+        // dinamicamente ao lado do anexo VI (não existe em criarFormulario).
 
         // Auto-save: qualquer input ou click no formulário agenda salvamento
         const formCont = document.getElementById('cred-form-container');
@@ -976,6 +966,8 @@
                 // Limpar restos antigos que possam ter sobrevivido
                 const fichaAntiga = document.getElementById('cred-ficha-inscricao');
                 if (fichaAntiga) fichaAntiga.remove();
+                const pisAntigo = document.getElementById('cred-doc-pis');
+                if (pisAntigo) pisAntigo.remove();
                 const outrosAnexosAntigo = document.getElementById('cred-outros-anexos');
                 if (outrosAnexosAntigo) outrosAnexosAntigo.remove();
 
@@ -989,6 +981,7 @@
 
                 moverFichaInscricao(modal, modalBody, formContainer);
                 moverDocIdentidade(modal, formContainer);
+                moverDocPIS(modal, modalBody);
                 injetarOutrosAnexos(modal);
                 injetarBotoesCategorias(modal);
             }
@@ -1078,6 +1071,9 @@
 
         // --- Mover doc de identidade (II) para dentro de Dados Pessoais ---
         moverDocIdentidade(modal, formContainer);
+
+        // --- Mover doc do PIS (VI) para seção destacada com o campo do número ---
+        moverDocPIS(modal, modalBody);
 
         // --- Injetar "Outros documentos anexos" ---
         injetarOutrosAnexos(modal);
@@ -1241,6 +1237,86 @@
             formContainer.insertBefore(docContainer, header.nextSibling);
         } else {
             formContainer.appendChild(docContainer);
+        }
+    }
+
+    /**
+     * Move a linha "VI – Cópia da inscrição do PIS ou PASEP ou NIT" da tabela nativa
+     * para uma seção destacada (`#cred-doc-pis`), com os botões Sim/Não da revisão e,
+     * logo abaixo, o campo de digitação do número do PIS/PASEP/NIT/NIS — análogo ao
+     * doc de identidade (II) com os campos CPF/RG. O anexo é a fonte do dado digitado.
+     */
+    function moverDocPIS(modal, modalBody) {
+        const tabelaPrincipal = modal.querySelector('.div_lista_aprovacao_anexos > table > tbody');
+        if (!tabelaPrincipal) return;
+
+        let docRow = null;
+        for (const tr of tabelaPrincipal.querySelectorAll(':scope > tr')) {
+            const td = tr.querySelector('td');
+            if (td && /^VI\s*[-–]/i.test(td.textContent.trim())) {
+                docRow = tr;
+                break;
+            }
+        }
+        if (!docRow) return;
+
+        const innerTable = docRow.querySelector('table');
+        if (!innerTable) return;
+
+        innerTable.querySelectorAll('td.menor > a[target="_blank"]').forEach(link => {
+            const nome = link.textContent.trim();
+            link.setAttribute('title', nome);
+            link.innerHTML = `<span class="cred-truncate">${nome}</span>`;
+        });
+
+        const labelTd = docRow.querySelector('td');
+        const label = document.createElement('label');
+        label.className = 'cred-section-label';
+        label.innerHTML = labelTd ? labelTd.innerHTML.trim() : 'VI – PIS/PASEP/NIT/NIS';
+
+        const docContainer = document.createElement('div');
+        docContainer.id = 'cred-doc-pis';
+        docContainer.className = 'cred-ficha-section';
+        docContainer.appendChild(label);
+        adicionarColunaStatusNaTabela(innerTable, 'VI');
+        docContainer.appendChild(innerTable);
+
+        // Campo de digitação do PIS, logo abaixo do anexo (fonte do dado)
+        const campo = document.createElement('div');
+        campo.className = 'cred-dados-row';
+        campo.style.marginTop = '8px';
+        campo.innerHTML = `
+            <div class="cred-field-block">
+                <label class="cred-section-label" for="cred-pis">Número do PIS/PASEP/NIT/NIS</label>
+                <input type="text" id="cred-pis" class="cred-cpf-input"
+                       placeholder="000.00000.00-0" maxlength="14" inputmode="numeric"
+                       autocomplete="nope" style="width: 160px;">
+            </div>`;
+        docContainer.appendChild(campo);
+
+        // Listener do PIS registrado aqui porque o input é criado dinamicamente (fora de criarFormulario)
+        // e fica no modalBody, não dentro de #cred-form-container — por isso agenda o auto-save explicitamente.
+        const pisEl = campo.querySelector('#cred-pis');
+        if (pisEl) pisEl.addEventListener('input', (e) => {
+            const digits = e.target.value.replace(/\D/g, '').slice(0, 11);
+            pisDigitos = digits;
+            let masked = digits;
+            if (digits.length > 10) masked = digits.slice(0,3) + '.' + digits.slice(3,8) + '.' + digits.slice(8,10) + '-' + digits.slice(10);
+            else if (digits.length > 8) masked = digits.slice(0,3) + '.' + digits.slice(3,8) + '.' + digits.slice(8);
+            else if (digits.length > 3) masked = digits.slice(0,3) + '.' + digits.slice(3,8);
+            else masked = digits;
+            e.target.value = masked;
+            agendarSalvarProgresso();
+        });
+
+        docRow.remove();
+
+        // Inserir logo após a Ficha de Inscrição (que fica no topo do modalBody)
+        const ficha = modalBody.querySelector('#cred-ficha-inscricao');
+        if (ficha && ficha.nextSibling) {
+            modalBody.insertBefore(docContainer, ficha.nextSibling);
+        } else {
+            modalBody.insertBefore(docContainer, modalBody.firstChild);
         }
     }
 
@@ -1422,6 +1498,7 @@
             const match = td.textContent.trim().match(ROMANA_RE);
             if (!match) continue; // Sem algarismo romano → pular
             if (match[1] === 'II') continue; // Tratado por moverDocIdentidade
+            if (match[1] === 'VI') continue; // Tratado por moverDocPIS
 
             adicionarColunaStatusNaTabela(tr.querySelector('table'), match[1]);
         }
@@ -1526,7 +1603,7 @@
         atualizarChipHabilitacao();
 
         cep = ''; logradouro = ''; numero = ''; bairro = ''; cidade = '';
-        bancoNome = ''; bancoCOMPE = ''; chavePix = ''; pisDigitos = '';
+        agenciaSantander = ''; contaSantander = ''; pisDigitos = '';
 
         const cpfEl = document.getElementById('cred-cpf');
         const rgEl = document.getElementById('cred-rg');
@@ -1538,8 +1615,8 @@
         const numeroEl = document.getElementById('cred-numero');
         const bairroEl = document.getElementById('cred-bairro');
         const cidadeEl = document.getElementById('cred-cidade');
-        const bancoInputEl = document.getElementById('cred-banco-input');
-        const pixElReset  = document.getElementById('cred-chavepix');
+        const agenciaElReset = document.getElementById('cred-agencia');
+        const contaElReset = document.getElementById('cred-conta');
         const nomeEl = document.getElementById('cred-nome-input');
         const protEl = document.getElementById('cred-res-prot');
         const dataEl = document.getElementById('cred-res-data');
@@ -1556,8 +1633,8 @@
         if (numeroEl) numeroEl.value = '';
         if (bairroEl) bairroEl.value = '';
         if (cidadeEl) cidadeEl.value = '';
-        if (bancoInputEl) bancoInputEl.value = '';
-        if (pixElReset) pixElReset.value = '';
+        if (agenciaElReset) agenciaElReset.value = '';
+        if (contaElReset) contaElReset.value = '';
         const pisElReset = document.getElementById('cred-pis');
         if (pisElReset) pisElReset.value = '';
         if (nomeEl) nomeEl.value = '';
@@ -1682,9 +1759,8 @@
             numero: numero,
             bairro: bairro,
             cidade: cidade,
-            bancoNome: bancoNome,
-            bancoCOMPE: bancoCOMPE,
-            chavePix: chavePix,
+            agencia: agenciaSantander,
+            conta: contaSantander,
             pis: pisDigitos,
             funcoes: funcoesSelecionadas.slice(),
             regioes: regioesSelecionadas.slice(),
@@ -1711,8 +1787,8 @@
         if (!cidade.trim()) return false;
         if (celularDigitos.length < 10) return false;
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
-        if (!bancoNome.trim()) return false;
-        if (!(document.getElementById('cred-chavepix')?.value.trim())) return false;
+        if (agenciaSantander.length !== 4) return false;
+        if (contaSantander.length !== 9) return false;
         if (pisDigitos.length !== 11) return false;
         if (funcoesSelecionadas.length === 0) return false;
         if (regioesSelecionadas.length === 0) return false;
@@ -1798,9 +1874,8 @@
         if (dados.numero)         numero = dados.numero;
         if (dados.bairro)         bairro = dados.bairro;
         if (dados.cidade)         cidade = dados.cidade;
-        if (dados.bancoNome)      bancoNome = dados.bancoNome;
-        if (dados.bancoCOMPE)     bancoCOMPE = dados.bancoCOMPE;
-        if (dados.chavePix)       chavePix = dados.chavePix;
+        if (dados.agencia)        agenciaSantander = dados.agencia;
+        if (dados.conta)          contaSantander = dados.conta;
         if (dados.pis)            pisDigitos = dados.pis;
         if (dados.funcoes && dados.funcoes.length)  funcoesSelecionadas = dados.funcoes.slice();
         if (dados.regioes && dados.regioes.length)  regioesSelecionadas = dados.regioes.slice();
@@ -1839,13 +1914,12 @@
         setVal('cred-numero', numero);
         setVal('cred-bairro', bairro);
         setVal('cred-cidade', cidade);
-        setVal('cred-banco-input', bancoNome);
-        if (chavePix) {
-            // Mostrar formatado se for CPF puro de 11 dígitos
-            const pixDisplay = /^\d{11}$/.test(chavePix)
-                ? chavePix.slice(0,3)+'.'+chavePix.slice(3,6)+'.'+chavePix.slice(6,9)+'-'+chavePix.slice(9)
-                : chavePix;
-            setVal('cred-chavepix', pixDisplay);
+        // Agência (texto puro, preserva zeros à esquerda)
+        setVal('cred-agencia', agenciaSantander);
+        // Conta formatada XXXXXXXX-X (preserva zeros à esquerda)
+        if (contaSantander) {
+            const c = contaSantander;
+            setVal('cred-conta', c.length > 8 ? c.slice(0, 8) + '-' + c.slice(8) : c);
         }
         // PIS/PASEP formatado
         if (pisDigitos) {
@@ -2219,13 +2293,12 @@
             mostrarErroValidacao('cred-email', 'Preencha um e-mail válido.');
             return false;
         }
-        if (!bancoNome.trim()) {
-            mostrarErroValidacao('cred-banco-input', 'Preencha o nome do banco.');
+        if (agenciaSantander.length !== 4) {
+            mostrarErroValidacao('cred-agencia', 'Preencha a agência Santander com exatamente 4 dígitos (mantenha os zeros à esquerda).');
             return false;
         }
-        const pixValV = document.getElementById('cred-chavepix')?.value.trim();
-        if (!pixValV) {
-            mostrarErroValidacao('cred-chavepix', 'Preencha a Chave Pix.');
+        if (contaSantander.length !== 9) {
+            mostrarErroValidacao('cred-conta', 'Preencha a conta Santander completa (8 dígitos + verificador).');
             return false;
         }
         if (pisDigitos.length !== 11) {
@@ -2513,11 +2586,11 @@
             cidade,                 // 16 Q  — Cidade
             email,                  // 17 R  — E-mail
             celularDigitos,         // 18 S  — Celular
-            bancoNome,              // 19 T  — Banco
-            chavePix,               // 20 U  — Chave Pix
-            '',                     // 21 V  — Agência Santander (reservado)
-            '',                     // 22 W  — Conta Corrente (reservado)
-            '',                     // 23 X  — Nome no Banco (reservado)
+            'Santander',            // 19 T  — Banco (sempre Santander)
+            cpfDigitos,             // 20 U  — Chave Pix (sempre o CPF)
+            agenciaSantander,       // 21 V  — Agência Santander (texto, preserva zeros à esquerda)
+            contaSantander,         // 22 W  — Conta Santander (texto, preserva zeros à esquerda)
+            candidato,              // 23 X  — Nome do titular da conta (= nome do candidato)
             pisDigitos,             // 24 Y  — PIS/PASEP/NIT/NIS
             colF,                   // 25 Z  — Educação Básica
             colG,                   // 26 AA — Educação Física
@@ -2529,8 +2602,12 @@
 
         const textData = cells.join('\t');
 
+        // Colunas cujos zeros à esquerda são significativos (agência V e conta W):
+        // força formato de texto no Google Sheets via mso-number-format para não virar número.
+        const COLS_TEXTO = new Set([21, 22]);
         const htmlCells = cells.map((val, i) => {
             if (i === 4 && url) return `<td><a href="${escapeHtml(url)}">${escapeHtml(val)}</a></td>`;
+            if (COLS_TEXTO.has(i)) return `<td style="mso-number-format:'\\@'">${escapeHtml(val)}</td>`;
             return `<td>${escapeHtml(val)}</td>`;
         }).join('');
         const htmlData = `<!DOCTYPE html><html><body><table><tr>${htmlCells}</tr></table></body></html>`;

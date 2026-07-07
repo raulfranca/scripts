@@ -85,6 +85,10 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
       * Ao sair do campo CEP (`blur`), se tiver 8 dígitos, o script faz um `fetch` para `https://viacep.com.br/ws/{CEP}/json/` e preenche automaticamente Logradouro, Bairro e Cidade. Número permanece vazio para preenchimento manual. Se a resposta contiver `erro: true` ou a requisição falhar, exibe `.cred-alert-erro` na seção. Todos os campos permanecem editáveis.
     * **Celular** — input com máscara progressiva; 10 dígitos → `(00) 0000-0000`; 11 dígitos → `(00) 00000-0000`. Armazena só dígitos em `celularDigitos`. **Extração automática:** se `.media-body .media-text .ind_tel` existir na primeira mensagem do protocolo, o campo é preenchido automaticamente. Campo sempre editável.
     * **E-mail** — input de texto. **Extração automática:** o texto direto de `.media-body .media-text` (excluindo `<span>` filhos como `.ind_tel` e `.ind_documento`) é usado se contiver um e-mail válido. Campo sempre editável. **Validação de formato** ao copiar: o regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/` é aplicado; campo é **opcional**, mas se preenchido precisa ser válido.
+    * **Dados da Conta Santander** — subseção com título no padrão de "Endereço" (`label.cred-section-label`). Contém dois campos obrigatórios, ambos gravados como **texto** para preservar zeros à esquerda:
+      * **Agência** (`cred-agencia` → `agenciaSantander`): apenas dígitos, **exatamente 4**. O script **não presume zeros** — se o usuário digitar `56`, o valor permanece `56` (inválido na conclusão), nunca vira `0056` nem `5600`.
+      * **Conta** (`cred-conta` → `contaSantander`): máscara `XXXXXXXX-X` (8 dígitos + 1 verificador = 9). Caso especial de digitação: se já houver 9 dígitos com zeros à esquerda e o usuário continuar digitando, os zeros à esquerda são descartados um a um para acomodar os novos dígitos.
+    * **PIS/PASEP/NIT/NIS** — o campo de digitação do número (`cred-pis` → `pisDigitos`, máscara `000.00000.00-0`, 11 dígitos) **não fica na subseção bancária**: é movido por `moverDocPIS` para uma seção destacada junto ao anexo da categoria **VI** ("Cópia da inscrição do PIS ou PASEP ou NIT"), da mesma forma que CPF/RG aparecem sob o anexo de identidade (II). A seção `#cred-doc-pis` contém o anexo, os botões Sim/Não da revisão da categoria VI e, abaixo, o campo do número.
   * **Função pretendida** — 3 botões, **múltipla seleção** (toggle): Educação Básica (verde institucional), Educação Física (vermelho), Artes (laranja). Botões inativos com `opacity: 0.35`; ativo com `opacity: 1` e leve escala.
   * **Regiões Escolares** — 5 botões, múltipla seleção (toggle): 1-Centro (amarelo), 2-Zona Oeste (verde institucional), 3-Zona Leste (vermelho), 4-Moreira César (verde), 5-Zona Rural (roxo).
 
@@ -136,10 +140,9 @@ Campos salvos no progresso:
 | `numero` | `string` | Resetado a cada protocolo; preenchimento manual |
 | `bairro` | `string` | Resetado a cada protocolo; autopreenchido pelo ViaCEP |
 | `cidade` | `string` | Resetado a cada protocolo; autopreenchido pelo ViaCEP |
-| `bancoNome` | `string` | Resetado a cada protocolo; selecionado via dropdown |
-| `bancoCOMPE` | `string` | Resetado a cada protocolo; código COMPE do banco selecionado |
-| `chavePix` | `string` | Resetado a cada protocolo; pré-preenchido com CPF formatado ao digitar o CPF |
-| `pisDigitos` | `string` (só dígitos) | Resetado a cada protocolo; máscara `000.00000.00-0` (11 dígitos) |
+| `agenciaSantander` | `string` (texto, 4 dígitos) | Resetado a cada protocolo; preserva zeros à esquerda; não presume zeros |
+| `contaSantander` | `string` (texto, 9 dígitos) | Resetado a cada protocolo; máscara `XXXXXXXX-X`; preserva zeros à esquerda |
+| `pisDigitos` | `string` (só dígitos) | Resetado a cada protocolo; máscara `000.00000.00-0` (11 dígitos); campo movido para junto do anexo VI |
 | `funcoesSelecionadas` | `string[]` | Múltipla seleção; reset limpa o array |
 | `regioesSelecionadas` | `number[]` | Múltipla seleção; reset limpa `.active` de todos |
 | `avaliacoesDocs` | `object` `{ [romana]: boolean }` | Avaliação Sim/Não por categoria; reset limpa o objeto |
@@ -160,8 +163,8 @@ O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na de
 > 10. Cidade — não pode estar vazia.
 > 11. Celular — mínimo 10 dígitos.
 > 12. E-mail — obrigatório e deve passar no regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`.
-> 13. Banco — não pode estar vazio.
-> 14. Chave Pix — não pode estar vazia.
+> 13. Agência Santander — exatamente 4 dígitos (zeros à esquerda contam; `56` é inválido).
+> 14. Conta Santander — 9 dígitos (8 + verificador).
 > 15. PIS/PASEP/NIT/NIS — 11 dígitos completos.
 > 16. Função pretendida — ao menos uma selecionada.
 > 17. Regiões Escolares — ao menos uma selecionada.
@@ -186,39 +189,45 @@ Os dados extraídos devem ser enviados para a área de transferência em dois fo
 * **Rich Text (HTML):** Formato principal, envelopado em tags `<table><tr><td>` com 38 colunas.
 * **Plain Text (TSV):** Formato de fallback separado por tabulações (`\t`), mesma ordem e quantidade de colunas.
 
-A função `copiarParaPlanilha()` lê diretamente das variáveis de estado do módulo (sem parâmetros). Mapeamento completo das 40 colunas (A–AN):
+A função `prepararDadosClipboard()` lê diretamente das variáveis de estado do módulo (sem parâmetros). Mapeamento completo das colunas (A–AS):
 
 | Col | Cabeçalho | Valor | Fonte |
-|-----|-----------|-------|
--------|
-| A | Data e hora | Texto livre | `dadosExtraidos.dataEnvio` |
-| B | Protocolo 1Doc | Hyperlink no HTML; texto no plain | `dadosExtraidos.protocolo` + `.url` |
-| C | Analisado por | `Renata`, `Catarina` ou `Alessandra` | `credenciadoraSalva` |
-| D | Nome do professor | Texto livre | `#cred-nome-input` (fallback: `dadosExtraidos.candidato`) |
-| E | CPF | 11 dígitos sem formatação | `cpfDigitos` |
-| F | RG | Só dígitos | `rgDigitos` |
-| G | Nacionalidade | Texto livre | `nacionalidade` |
-| H | Estado civil | Texto livre | `estadoCivil` |
-| I | *(reservado — Etnia)* | Sempre vazio | `''` |
-| J | CEP | 8 dígitos | `cep` |
-| K | Logradouro | Texto livre | `logradouro` |
-| L | Número | Texto livre | `numero` |
-| M | Bairro | Texto livre | `bairro` |
-| N | Cidade | Texto livre | `cidade` |
-| O | E-mail | Texto livre | `email` |
-| P | Celular | Só dígitos | `celularDigitos` |
-| Q | Banco | Texto livre | `bancoNome` |
-| R | Chave Pix | Texto livre | `chavePix` |
-| S | PIS/PASEP/NIT/NIS | Só dígitos | `pisDigitos` |
-| T | Educação Básica | `Educação Básica` ou vazio | `funcoesSelecionadas` (valor interno `Ed. Básica`) |
-| U | Educação Física | `Educação Física` ou vazio | `funcoesSelecionadas` (valor interno `Ed. Física`) |
-| V | Artes | `Artes` ou vazio | `funcoesSelecionadas` (valor interno `Artes`) |
-| W–AA | Regiões 1–5 | Número inteiro ou vazio | `regioesSelecionadas` |
-| AB–AL | Documentos I–XI | `sim`, `não` ou vazio | `avaliacoesDocs[cat]` (true→sim, false→não, ausente→vazio) |
-| AM | Resultado | `habilitado` ou `inabilitado` | Calculado: algum `false` → inabilitado; todos `true` → habilitado |
-| AN | Ciclo | `'01'`–`'10'` ou vazio | `cicloAtual` (calculado por `aplicarMarcadorCiclo`) |
+|-----|-----------|-------|-------|
+| A | Analisado por | Credenciadora ativa | `credenciadoraSalva` |
+| B | Data e hora | Texto livre | `dadosExtraidos.dataEnvio` |
+| C | Resultado | `habilitado` ou `inabilitado` | Calculado: algum `false` → inabilitado; todos `true` → habilitado |
+| D | Nome do professor | Texto livre | `candidato` (`#cred-nome-input`) |
+| E | Protocolo 1Doc | Hyperlink no HTML; texto no plain | `dadosExtraidos.protocolo` + `.url` |
+| F | Motivo da inabilitação | Categorias com "Não" (ex: `VI, X`) ou vazio | `avaliacoesDocs` |
+| G | CPF | Só dígitos | `cpfDigitos` |
+| H | RG | Só dígitos | `rgDigitos` |
+| I | Nacionalidade | Texto livre | `nacionalidade` |
+| J | Data de Nascimento | `DD/MM/AAAA` | `dataNascimento` |
+| K | Estado civil | Texto livre | `estadoCivil` |
+| L | *(reservado — Etnia)* | Sempre vazio | `''` |
+| M | CEP | Só dígitos | `cep` |
+| N | Logradouro | Texto livre | `logradouro` |
+| O | Número | Texto livre | `numero` |
+| P | Bairro | Texto livre | `bairro` |
+| Q | Cidade | Texto livre | `cidade` |
+| R | E-mail | Texto livre | `email` |
+| S | Celular | Só dígitos | `celularDigitos` |
+| T | Banco | **Literal fixo** `Santander` | — |
+| U | Chave Pix | **Sempre o CPF** (só dígitos) | `cpfDigitos` |
+| V | Agência Santander | Texto (preserva zeros à esquerda; `mso-number-format` no HTML) | `agenciaSantander` |
+| W | Conta Santander | Texto (preserva zeros à esquerda; `mso-number-format` no HTML) | `contaSantander` |
+| X | Nome do titular da conta | = nome do candidato | `candidato` |
+| Y | PIS/PASEP/NIT/NIS | Só dígitos | `pisDigitos` |
+| Z | Educação Básica | `Educação Básica` ou vazio | `funcoesSelecionadas` (valor interno `Ed. Básica`) |
+| AA | Educação Física | `Educação Física` ou vazio | `funcoesSelecionadas` (valor interno `Ed. Física`) |
+| AB | Artes | `Artes` ou vazio | `funcoesSelecionadas` (valor interno `Artes`) |
+| AC–AG | Regiões 1–5 | Número inteiro ou vazio | `regioesSelecionadas` |
+| AH–AR | Documentos I–XI | `sim`, `não` ou vazio | `avaliacoesDocs[cat]` (true→sim, false→não, ausente→vazio) |
+| AS | Ciclo | `'01'`–`'10'` ou vazio | `cicloAtual` (calculado por `aplicarMarcadorCiclo`) |
 
 Regras de transformação:
+* **Banco/Pix:** coluna T é sempre o literal `Santander`; coluna U é sempre o CPF do candidato (o campo "Chave Pix" foi removido do formulário).
+* **Agência/Conta:** gravadas como texto; as células V e W recebem `style="mso-number-format:'@'"` no `text/html` para o Google Sheets tratá-las como texto e não descartar zeros à esquerda.
 * **Funções:** Mapeamento explícito de rótulos internos (`Ed. Básica`→`Educação Básica`, `Ed. Física`→`Educação Física`, `Artes`→`Artes`).
 * **Regiões:** Número inteiro (1–5) se selecionado, vazio se não.
 * **Documentos:** Valores minúsculos (`sim`/`não`) conforme validação de dados da planilha.

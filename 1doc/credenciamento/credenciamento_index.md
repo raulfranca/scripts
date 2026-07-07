@@ -32,9 +32,8 @@
 | `numero` | `string` | por candidato | Número do endereço (preenchimento manual) |
 | `bairro` | `string` | por candidato | Autopreenchido pelo ViaCEP; editável |
 | `cidade` | `string` | por candidato | Autopreenchido pelo ViaCEP; editável |
-| `bancoNome` | `string` | por candidato | Nome do banco (campo de texto livre) |
-| `bancoCOMPE` | `string` | por candidato | Sempre vazio — campo de texto livre, sem lookup |
-| `chavePix` | `string` | por candidato | Chave Pix (default: CPF formatado; editável) |
+| `agenciaSantander` | `string` | por candidato | Agência Santander; **texto** (preserva zeros à esquerda). Exatamente 4 dígitos; não presume zeros |
+| `contaSantander` | `string` | por candidato | Conta Santander; **texto** (preserva zeros à esquerda). 8 dígitos + verificador (9); máscara `XXXXXXXX-X` |
 | `avaliacoesDocs` | `object` | por candidato | `{ 'I': true/false, 'II': true/false, ... }` — `true`=Sim, `false`=Não, ausente=pendente |
 | `concluido` | `boolean` | por candidato | `true` após clicar em "Concluir" com sucesso; persiste no `localStorage`. Ativa modo congelado ao restaurar progresso. |
 | `aguardandoEnvioResposta` | `boolean` | por candidato / sessão | `true` entre a Fase 1 e a Fase 2 do fluxo de conclusão; resetado na navegação SPA. |
@@ -61,10 +60,11 @@
 | `injetarControlesNoModal` | **Orquestrador principal**: injeta header, info-block, formulário, ficha, outros-anexos, botões Sim/Não e footer; guard via atributo `data-cred-injetado`; chama `resetarEstadoCandidato` e `executarFluxo` |
 | `moverFichaInscricao` | Remove linha "I - Ficha de Inscrição" da tabela nativa e a reposiciona como `<div id="cred-ficha-inscricao">` acima do formulário; chama `adicionarColunaStatusNaTabela` para categoria `'I'` |
 | `moverDocIdentidade` | Remove linha "II – Cópia de documento de Identidade..." da tabela nativa e a injeta como `<div id="cred-doc-identidade">` no final do `formContainer` (seção Dados Pessoais); chama `adicionarColunaStatusNaTabela` para categoria `'II'`; pula categoria II em `injetarBotoesCategorias` |
+| `moverDocPIS` | Remove linha "VI – Cópia da inscrição do PIS/PASEP/NIT" da tabela nativa e a injeta como `<div id="cred-doc-pis">` (`.cred-ficha-section`) no `modalBody`, logo após a Ficha de Inscrição; contém o anexo, os botões Sim/Não da categoria `'VI'` e o campo `#cred-pis` (número do PIS) logo abaixo. Registra o listener do PIS (input criado dinamicamente). Pula categoria VI em `injetarBotoesCategorias` |
 | `injetarOutrosAnexos` | Compara IDs de `#table_anexos_filhos` com os já no modal (via parâmetro `iea` base64); injeta linha `#cred-outros-anexos` com anexos avulsos de despachos posteriores |
 | `criarGrupoBotoes` | Cria `<div class="cred-simnao-group" data-categoria="…">` com botões Sim/Não; toggle: clique duplo deseleciona; atualiza `avaliacoesDocs` e chama `atualizarChipHabilitacao` |
 | `adicionarColunaStatusNaTabela` | Reutiliza coluna "Status da revisão" da inner table; injeta `criarGrupoBotoes` com `rowspan`; oculta botões "Revisar" nativos; fallback: adiciona coluna no final |
-| `injetarBotoesCategorias` | Itera linhas da tabela principal; para cada com algarismo romano (I–XI) chama `adicionarColunaStatusNaTabela` |
+| `injetarBotoesCategorias` | Itera linhas da tabela principal; para cada com algarismo romano (I–XI) chama `adicionarColunaStatusNaTabela`; pula II (tratado por `moverDocIdentidade`) e VI (tratado por `moverDocPIS`) |
 | `registrarEventListeners` | Registra handlers: seleção de credenciadora (persiste em `localStorage`, chama `trocarMarcador`), checkboxes de preferência, botão Copiar → `copiarEFechar`, botão Dúvida → salva progresso + aplica marcador "Dúvida" + navega ao inbox; chama `registrarEventListenersFormulario` |
 | `atualizarChipHabilitacao` | Atualiza `#cred-chip-habilitacao`: verde = todos Sim, vermelho = ≥1 Não, cinza = algum pendente |
 | `resetarEstadoCandidato` | Zera todas as variáveis por candidato e limpa os campos do formulário no DOM (inputs, checkboxes, botões toggle) |
@@ -93,7 +93,7 @@
 | `mostrarErroValidacao` | Insere `.cred-alert-erro` no `.cred-form-section` do campo e rola o modal até ele |
 | `getCategoriaLabel` | Retorna rótulo legível da categoria: categoria I → lê `label.cred-section-label`; demais → primeira `<td>` da linha externa da tabela |
 | `mostrarErroBotoes` | Insere `.cred-alert-erro` próximo ao primeiro grupo pendente e rola até ele |
-| `validarFormulario` | Valida sequencialmente (fail-fast): nome confirmado (checkbox), CPF 11 dígitos, RG, data de nascimento preenchida/válida (≥18 anos), estado civil, endereço (CEP/logradouro/número/bairro/cidade), celular, e-mail, banco, Pix, PIS, ≥1 função, ≥1 região, todos os Sim/Não respondidos |
+| `validarFormulario` | Valida sequencialmente (fail-fast): nome confirmado (checkbox), CPF 11 dígitos, RG, data de nascimento preenchida/válida (≥18 anos), estado civil, endereço (CEP/logradouro/número/bairro/cidade), celular, e-mail, agência (4 dígitos), conta (9 dígitos), PIS, ≥1 função, ≥1 região, todos os Sim/Não respondidos |
 | `copiarEFechar` | **Fase 1:** valida, aplica marcadores credenciadora/ciclo/habilitado, seta `concluido=true`, salva progresso e chama `executarFase1Conclusao`. **Modo concluído:** apenas copia e abre planilha. |
 | `aguardarElemento` | Polling (100ms) que aguarda um elemento no DOM por seletor CSS + filtro opcional; resolve com o elemento ou `null` após timeout. |
 | `executarFase1Conclusao` | Orquestra o fluxo pós-modal: fecha dialog → clica "Responder" nativo → insere modelo TinyMCE → seleciona destinatário Select2 → seta `aguardandoEnvioResposta=true` → exibe dialog de aviso. |
@@ -135,7 +135,10 @@
 | `cred-chip-habilitacao` | `injetarControlesNoModal` | Chip de status (Em avaliação / Habilitado / Inabilitado) |
 | `cred-cpf` | `criarFormulario` | Input CPF (máscara `000.000.000-00`) |
 | `cred-rg` | `criarFormulario` | Input RG (máscara `00.000.000-0`) |
-| `cred-banco-input` | `criarFormulario` | Input Banco (campo de texto livre) |
+| `cred-agencia` | `criarFormulario` | Input Agência Santander (4 dígitos; texto, preserva zeros à esquerda) |
+| `cred-conta` | `criarFormulario` | Input Conta Santander (máscara `XXXXXXXX-X`; texto, preserva zeros à esquerda) |
+| `cred-doc-pis` | `moverDocPIS` | Seção destacada com o anexo VI (PIS/PASEP), botões Sim/Não e o campo `#cred-pis` |
+| `cred-pis` | `moverDocPIS` | Input número do PIS/PASEP/NIT/NIS (máscara `000.00000.00-0`), criado junto ao anexo VI |
 | `cred-nacionalidade` | `criarFormulario` | Input Nacionalidade (default: `brasileira`) |
 | `cred-nascimento` | `criarFormulario` | Input Data de Nascimento (máscara `DD/MM/AAAA`; inputmode numeric) |
 | `cred-nascimento-picker-btn` | `criarFormulario` | Botão calendário que aciona o `input[type=date]` nativo oculto |
@@ -220,11 +223,11 @@ observerUI (MutationObserver)
 | Q | Cidade |
 | R | E-mail |
 | S | Celular (apenas dígitos) |
-| T | Banco |
-| U | Chave Pix |
-| V | Agência Santander (reservado — sempre vazio) |
-| W | Conta Corrente (reservado — sempre vazio) |
-| X | Nome no Banco (reservado — sempre vazio) |
+| T | Banco (literal fixo `Santander`) |
+| U | Chave Pix (sempre o CPF, apenas dígitos) |
+| V | Agência Santander (`agenciaSantander`, texto — formato texto no Sheets p/ preservar zeros) |
+| W | Conta Santander (`contaSantander`, texto — formato texto no Sheets p/ preservar zeros) |
+| X | Nome do titular da conta (= nome do candidato) |
 | Y | PIS/PASEP/NIT/NIS (apenas dígitos) |
 | Z | `Educação Básica` (se selecionada, senão vazio) |
 | AA | `Educação Física` (se selecionada, senão vazio) |

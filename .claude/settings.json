@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check 1doc/credenciamento/credenciamento.user.js)",
+      "Bash(rm -f /tmp/test_mask.js && echo \"cleaned\")"
+    ],
+    "additionalDirectories": [
+      "\\tmp"
+    ]
+  }
+}
