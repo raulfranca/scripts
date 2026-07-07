@@ -93,7 +93,7 @@
 | `mostrarErroValidacao` | Insere `.cred-alert-erro` no `.cred-form-section` do campo e rola o modal até ele |
 | `getCategoriaLabel` | Retorna rótulo legível da categoria: categoria I → lê `label.cred-section-label`; demais → primeira `<td>` da linha externa da tabela |
 | `mostrarErroBotoes` | Insere `.cred-alert-erro` próximo ao primeiro grupo pendente e rola até ele |
-| `validarFormulario` | Valida sequencialmente: nome confirmado (checkbox), CPF 11 dígitos, ≥1 função, ≥1 região, e-mail válido (se preenchido), todos os Sim/Não respondidos |
+| `validarFormulario` | Valida sequencialmente (fail-fast): nome confirmado (checkbox), CPF 11 dígitos, RG, data de nascimento preenchida/válida (≥18 anos), estado civil, endereço (CEP/logradouro/número/bairro/cidade), celular, e-mail, banco, Pix, PIS, ≥1 função, ≥1 região, todos os Sim/Não respondidos |
 | `copiarEFechar` | **Fase 1:** valida, aplica marcadores credenciadora/ciclo/habilitado, seta `concluido=true`, salva progresso e chama `executarFase1Conclusao`. **Modo concluído:** apenas copia e abre planilha. |
 | `aguardarElemento` | Polling (100ms) que aguarda um elemento no DOM por seletor CSS + filtro opcional; resolve com o elemento ou `null` após timeout. |
 | `executarFase1Conclusao` | Orquestra o fluxo pós-modal: fecha dialog → clica "Responder" nativo → insere modelo TinyMCE → seleciona destinatário Select2 → seta `aguardandoEnvioResposta=true` → exibe dialog de aviso. |

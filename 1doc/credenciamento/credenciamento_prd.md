@@ -73,10 +73,11 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
   **Formulário de credenciamento (dentro do `.modal-body`, acima da tabela):** campos preenchidos/corrigidos pelo usuário, agrupados por seção:
 
   * **Seção "Dados Pessoais"** (header visual verde institucional sobre os campos):
-    * **Linha 1 (horizontal — `.cred-dados-row`):** CPF, RG e Nacionalidade ficam lado a lado com `.cred-field-block` por campo.
+    * **Linha 1 (horizontal — `.cred-dados-row`):** CPF, RG, Nacionalidade e Data de Nascimento ficam lado a lado com `.cred-field-block` por campo.
       * **CPF** — input com máscara progressiva `000.000.000-00` (armazena só dígitos).
       * **RG** — input aceita apenas dígitos; máscara `00.000.000-0` (9 dígitos). Se o usuário digitar apenas 8 dígitos, o campo formata como `00.000.000` (sem o traço e dígito verificador). Armazena só dígitos em `rgDigitos`.
       * **Nacionalidade** — input de texto pré-preenchido com `brasileira` (não apenas placeholder — tem `value` real). Editável pelo usuário. Reseta para `brasileira` a cada novo protocolo.
+      * **Data de Nascimento** — input com máscara progressiva `DD/MM/AAAA` (`cred-nascimento`); botão de calendário (`cred-nascimento-picker-btn`) aciona um `input[type=date]` nativo oculto para seleção via date picker. **Campo obrigatório.** A variável `dataNascimento` só é considerada preenchida quando a data está completa (8 dígitos), é uma data de calendário válida **e** o candidato tem ≥ 18 anos; caso contrário fica vazia. Armazena `DD/MM/AAAA`.
     * **Linha 2:** Estado civil — seleção única via botões (`.cred-estadocivil-btn`): Solteiro(a), Casado(a), Divorciado(a), Viúvo(a), Separado(a), União estável. Clicar no botão ativo o deseleciona (toggle). Reseta a cada protocolo.
     * **Endereço** — campos dispostos em duas linhas:
       * **Linha 1:** CEP (máscara `00000-000`, 8 dígitos), Logradouro, Número.
@@ -150,20 +151,21 @@ O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na de
 > 1. Checkbox "Este nome é igual ao que está na ficha de inscrição" — deve estar marcado.
 > 2. CPF — 11 dígitos completos.
 > 3. RG — mínimo 8 dígitos.
-> 4. Estado civil — obrigatório selecionar uma opção.
-> 5. CEP — 8 dígitos.
-> 6. Logradouro — não pode estar vazio.
-> 7. Número — não pode estar vazio.
-> 8. Bairro — não pode estar vazio.
-> 9. Cidade — não pode estar vazia.
-> 10. Celular — mínimo 10 dígitos.
-> 11. E-mail — obrigatório e deve passar no regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`.
-> 12. Banco — não pode estar vazio.
-> 13. Chave Pix — não pode estar vazia.
-> 14. PIS/PASEP/NIT/NIS — 11 dígitos completos.
-> 15. Função pretendida — ao menos uma selecionada.
-> 16. Regiões Escolares — ao menos uma selecionada.
-> 17. Botões Sim/Não — todos os grupos de categoria devem ter avaliação.
+> 4. Data de Nascimento — obrigatória; `dataNascimento` deve estar preenchida (data completa, válida e candidato ≥ 18 anos). Mensagem distingue campo em branco/incompleto de data inválida ou idade < 18.
+> 5. Estado civil — obrigatório selecionar uma opção.
+> 6. CEP — 8 dígitos.
+> 7. Logradouro — não pode estar vazio.
+> 8. Número — não pode estar vazio.
+> 9. Bairro — não pode estar vazio.
+> 10. Cidade — não pode estar vazia.
+> 11. Celular — mínimo 10 dígitos.
+> 12. E-mail — obrigatório e deve passar no regex `/^[^\s@]+@[^\s@]+\.[^\s@]+$/`.
+> 13. Banco — não pode estar vazio.
+> 14. Chave Pix — não pode estar vazia.
+> 15. PIS/PASEP/NIT/NIS — 11 dígitos completos.
+> 16. Função pretendida — ao menos uma selecionada.
+> 17. Regiões Escolares — ao menos uma selecionada.
+> 18. Botões Sim/Não — todos os grupos de categoria devem ter avaliação.
 
 ### 3.4. Automação de Interface (Marcadores)
 

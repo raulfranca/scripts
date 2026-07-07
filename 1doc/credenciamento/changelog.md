@@ -11,6 +11,10 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+### Alterado — credenciamento
+
+- **Data de nascimento agora é campo obrigatório (`validarFormulario`):** ao clicar em "Concluir", o sistema impede a conclusão e exibe erro se a data de nascimento não estiver preenchida — mesmo comportamento dos demais campos obrigatórios. A validação foi inserida logo após a do RG (seguindo a ordem visual do formulário). A mensagem distingue os casos: campo em branco/incompleto (`"Preencha a data de nascimento do candidato (DD/MM/AAAA)."`) e data preenchida mas inválida ou candidato com menos de 18 anos (`"Data de nascimento inválida ou candidato com menos de 18 anos."`), já que `dataNascimento` fica vazio em ambos.
+
 ## [0.6.1] — 2026-06-10
 
 ### Corrigido — credenciamento

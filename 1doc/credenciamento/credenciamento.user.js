@@ -2178,6 +2178,15 @@
                 : 'Preencha o RG do candidato.');
             return false;
         }
+        if (!dataNascimento) {
+            // dataNascimento fica vazio se o campo está em branco, incompleto, com data inválida ou idade < 18.
+            const nascInput = document.getElementById('cred-nascimento');
+            const preenchido = nascInput && nascInput.value.replace(/\D/g, '').length === 8;
+            mostrarErroValidacao('cred-nascimento', preenchido
+                ? 'Data de nascimento inválida ou candidato com menos de 18 anos.'
+                : 'Preencha a data de nascimento do candidato (DD/MM/AAAA).');
+            return false;
+        }
         if (!estadoCivil) {
             mostrarErroValidacao('cred-estadocivil-group', 'Selecione o estado civil do candidato.');
             return false;
