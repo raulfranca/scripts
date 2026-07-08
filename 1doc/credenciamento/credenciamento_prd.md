@@ -72,8 +72,8 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
 
   **Formulário de credenciamento (dentro do `.modal-body`, acima da tabela):** campos preenchidos/corrigidos pelo usuário, agrupados por seção:
 
-  * **Seção "Dados Pessoais"** (header visual verde institucional sobre os campos):
-    * **Linha 1 (horizontal — `.cred-dados-row`):** CPF, RG, Nacionalidade e Data de Nascimento ficam lado a lado com `.cred-field-block` por campo.
+  * **Seção "Dados Pessoais"** (header visual verde institucional sobre os campos) — é a **primeira** seção do formulário. Ordem no DOM: cabeçalho "Dados Pessoais" → anexo **II** (`#cred-doc-identidade`, injetado por `moverDocIdentidade`) → anexo **VI** (`#cred-doc-pis`, injetado por `moverDocPIS`) → linha CPF/RG/Nacionalidade/Data de Nascimento → demais seções (Estado civil, Endereço, etc.).
+    * **Linha 1 (horizontal — `.cred-dados-row`):** CPF, RG, Nacionalidade e Data de Nascimento ficam lado a lado com `.cred-field-block` por campo, **logo abaixo do cabeçalho e dos anexos II/VI**.
       * **CPF** — input com máscara progressiva `000.000.000-00` (armazena só dígitos).
       * **RG** — input aceita apenas dígitos; máscara `00.000.000-0` (9 dígitos). Se o usuário digitar apenas 8 dígitos, o campo formata como `00.000.000` (sem o traço e dígito verificador). Armazena só dígitos em `rgDigitos`.
       * **Nacionalidade** — input de texto pré-preenchido com `brasileira` (não apenas placeholder — tem `value` real). Editável pelo usuário. Reseta para `brasileira` a cada novo protocolo.

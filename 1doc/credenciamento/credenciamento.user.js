@@ -524,6 +524,38 @@
         const formContainer = document.createElement('div');
         formContainer.id = 'cred-form-container';
         formContainer.innerHTML = `
+            <div class="cred-section-group-header">Dados Pessoais</div>
+            <div class="cred-form-section">
+                <div class="cred-dados-row">
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-cpf">CPF</label>
+                        <input type="text" id="cred-cpf" class="cred-cpf-input"
+                               placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="nope">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-rg">RG</label>
+                        <input type="text" id="cred-rg" class="cred-cpf-input"
+                               placeholder="00.000.000-0" maxlength="14" inputmode="numeric" autocomplete="nope">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-nacionalidade">Nacionalidade</label>
+                        <input type="text" id="cred-nacionalidade" class="cred-cpf-input"
+                               value="brasileira" autocomplete="nope">
+                    </div>
+                    <div class="cred-field-block">
+                        <label class="cred-section-label" for="cred-nascimento">Data de Nascimento</label>
+                        <div class="cred-nascimento-wrap">
+                            <input type="text" id="cred-nascimento" class="cred-cpf-input"
+                                   placeholder="DD/MM/AAAA" maxlength="10" inputmode="numeric" autocomplete="nope"
+                                   style="width: 110px;">
+                            <button type="button" id="cred-nascimento-picker-btn" class="btn btn-mini cred-nascimento-picker-btn" title="Selecionar data">
+                                <i class="icon-calendar"></i>
+                            </button>
+                            <input type="date" id="cred-nascimento-date" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;">
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="cred-form-section">
                 <label class="cred-section-label">Estado civil</label>
                 <div class="cred-btn-group" id="cred-estadocivil-group">
@@ -614,38 +646,6 @@
                     <button class="btn btn-mini cred-toggle-btn" data-regiao="3"><i class="icon-check-empty"></i> 3 – Zona Leste</button>
                     <button class="btn btn-mini cred-toggle-btn" data-regiao="4"><i class="icon-check-empty"></i> 4 – Moreira César</button>
                     <button class="btn btn-mini cred-toggle-btn" data-regiao="5"><i class="icon-check-empty"></i> 5 – Zona Rural</button>
-                </div>
-            </div>
-            <div class="cred-section-group-header">Dados Pessoais</div>
-            <div class="cred-form-section">
-                <div class="cred-dados-row">
-                    <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-cpf">CPF</label>
-                        <input type="text" id="cred-cpf" class="cred-cpf-input"
-                               placeholder="000.000.000-00" maxlength="14" inputmode="numeric" autocomplete="nope">
-                    </div>
-                    <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-rg">RG</label>
-                        <input type="text" id="cred-rg" class="cred-cpf-input"
-                               placeholder="00.000.000-0" maxlength="14" inputmode="numeric" autocomplete="nope">
-                    </div>
-                    <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-nacionalidade">Nacionalidade</label>
-                        <input type="text" id="cred-nacionalidade" class="cred-cpf-input"
-                               value="brasileira" autocomplete="nope">
-                    </div>
-                    <div class="cred-field-block">
-                        <label class="cred-section-label" for="cred-nascimento">Data de Nascimento</label>
-                        <div class="cred-nascimento-wrap">
-                            <input type="text" id="cred-nascimento" class="cred-cpf-input"
-                                   placeholder="DD/MM/AAAA" maxlength="10" inputmode="numeric" autocomplete="nope"
-                                   style="width: 110px;">
-                            <button type="button" id="cred-nascimento-picker-btn" class="btn btn-mini cred-nascimento-picker-btn" title="Selecionar data">
-                                <i class="icon-calendar"></i>
-                            </button>
-                            <input type="date" id="cred-nascimento-date" style="position:absolute;opacity:0;pointer-events:none;width:0;height:0;">
-                        </div>
-                    </div>
                 </div>
             </div>
         `;
