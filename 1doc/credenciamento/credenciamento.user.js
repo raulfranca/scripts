@@ -524,8 +524,7 @@
         const formContainer = document.createElement('div');
         formContainer.id = 'cred-form-container';
         formContainer.innerHTML = `
-            <div class="cred-section-group-header">Dados Pessoais</div>
-            <div class="cred-form-section">
+            <div class="cred-form-section" id="cred-identidade-campos">
                 <div class="cred-dados-row">
                     <div class="cred-field-block">
                         <label class="cred-section-label" for="cred-cpf">CPF</label>
@@ -556,6 +555,7 @@
                     </div>
                 </div>
             </div>
+            <div id="cred-ficha-campos">
             <div class="cred-form-section">
                 <label class="cred-section-label">Estado civil</label>
                 <div class="cred-btn-group" id="cred-estadocivil-group">
@@ -647,6 +647,7 @@
                     <button class="btn btn-mini cred-toggle-btn" data-regiao="4"><i class="icon-check-empty"></i> 4 – Moreira César</button>
                     <button class="btn btn-mini cred-toggle-btn" data-regiao="5"><i class="icon-check-empty"></i> 5 – Zona Rural</button>
                 </div>
+            </div>
             </div>
         `;
         return formContainer;
@@ -945,12 +946,18 @@
         // PIS/PASEP — o listener é registrado em moverDocPIS, pois o input é criado
         // dinamicamente ao lado do anexo VI (não existe em criarFormulario).
 
-        // Auto-save: qualquer input ou click no formulário agenda salvamento
-        const formCont = document.getElementById('cred-form-container');
-        if (formCont) {
-            formCont.addEventListener('input', agendarSalvarProgresso);
-            formCont.addEventListener('click', agendarSalvarProgresso);
-        }
+        // Auto-save: qualquer input ou click no formulário agenda salvamento.
+        // Os campos são movidos para dentro das subseções dos anexos (I/II/VI), então
+        // registramos o listener delegado em cada container que hospeda campos:
+        //  - #cred-form-container: cabeçalho + subseções II (CPF/RG) e VI (PIS)
+        //  - #cred-ficha-campos: campos gerais (Estado civil, Endereço, etc.), movidos para a Ficha I
+        ['cred-form-container', 'cred-ficha-campos'].forEach(id => {
+            const cont = document.getElementById(id);
+            if (cont) {
+                cont.addEventListener('input', agendarSalvarProgresso);
+                cont.addEventListener('click', agendarSalvarProgresso);
+            }
+        });
     }
 
     /**
@@ -963,15 +970,37 @@
             // Re-injetar elementos dependentes da tabela AJAX (formulário, ficha, outros anexos).
             const modalBody = modal.querySelector('.modal-body');
             if (modalBody) {
-                // Limpar restos antigos que possam ter sobrevivido
+                let formContainer = document.getElementById('cred-form-container');
+
+                // Limpar restos antigos que possam ter sobrevivido.
+                // O anexo II (#cred-doc-identidade) contém os campos #cred-identidade-campos
+                // (CPF/RG/Nacionalidade/Nascimento); antes de removê-lo, resgatar esses campos
+                // de volta para o formulário para preservar os inputs e seus valores —
+                // moverDocIdentidade os re-aninhará na nova subseção II.
+                const identidadeAntigo = document.getElementById('cred-doc-identidade');
+                if (identidadeAntigo) {
+                    const campos = identidadeAntigo.querySelector('#cred-identidade-campos');
+                    if (campos && formContainer) formContainer.appendChild(campos);
+                    identidadeAntigo.remove();
+                }
+                // A Ficha (I) contém #cred-ficha-campos (Estado civil, Endereço, etc.);
+                // resgatar de volta ao formulário antes de remover, preservando os inputs.
                 const fichaAntiga = document.getElementById('cred-ficha-inscricao');
-                if (fichaAntiga) fichaAntiga.remove();
+                if (fichaAntiga) {
+                    const camposF = fichaAntiga.querySelector('#cred-ficha-campos');
+                    if (camposF && formContainer) formContainer.appendChild(camposF);
+                    fichaAntiga.remove();
+                }
                 const pisAntigo = document.getElementById('cred-doc-pis');
                 if (pisAntigo) pisAntigo.remove();
                 const outrosAnexosAntigo = document.getElementById('cred-outros-anexos');
                 if (outrosAnexosAntigo) outrosAnexosAntigo.remove();
+                // Headers de grupo — remover para reinjetar na posição correta (relativa à nova ficha/tabela)
+                ['cred-header-preenchimento', 'cred-header-verificacao'].forEach(id => {
+                    const h = document.getElementById(id);
+                    if (h) h.remove();
+                });
 
-                let formContainer = document.getElementById('cred-form-container');
                 if (!formContainer) {
                     // Formulário foi destruído pelo reload AJAX — recriar
                     formContainer = criarFormulario();
@@ -982,6 +1011,7 @@
                 moverFichaInscricao(modal, modalBody, formContainer);
                 moverDocIdentidade(modal, formContainer);
                 moverDocPIS(modal, modalBody, formContainer);
+                injetarHeadersSecao(modal, modalBody);
                 injetarOutrosAnexos(modal);
                 injetarBotoesCategorias(modal);
             }
@@ -1074,6 +1104,9 @@
 
         // --- Mover doc do PIS (VI) para seção destacada com o campo do número ---
         moverDocPIS(modal, modalBody, formContainer);
+
+        // --- Injetar cabeçalhos de grupo (Preenchimento de Dados Pessoais / Verificação de Documentos) ---
+        injetarHeadersSecao(modal, modalBody);
 
         // --- Injetar "Outros documentos anexos" ---
         injetarOutrosAnexos(modal);
@@ -1187,6 +1220,16 @@
         avisoFicha.innerHTML = 'Conferir se a ficha de inscrição é a <b>versão retificada</b>: 3 – Zona Leste, 4 – Moreira César. Caso não, procure ao final desta lista a seção "Outros documentos anexos".';
         fichaContainer.appendChild(avisoFicha);
 
+        // Mover os campos lidos DESTE documento (Estado civil, Endereço, E-mail/Celular,
+        // Conta Santander, Função, Regiões) para dentro da própria subseção I —
+        // mesmo padrão de II (CPF/RG) e VI (PIS): o anexo é a fonte dos dados, então
+        // os campos ficam logo abaixo dele.
+        const camposFicha = formContainer.querySelector('#cred-ficha-campos');
+        if (camposFicha) {
+            camposFicha.style.marginTop = '8px';
+            fichaContainer.appendChild(camposFicha);
+        }
+
         // Remover a linha original da tabela
         fichaRow.remove();
 
@@ -1229,15 +1272,20 @@
         adicionarColunaStatusNaTabela(innerTable, 'II');
         docContainer.appendChild(innerTable);
 
+        // Mover os campos lidos DESTE documento (CPF, RG, Nacionalidade, Data de Nascimento)
+        // para dentro da própria subseção II — mesmo padrão da categoria VI (PIS).
+        // O anexo é a fonte do dado digitado, então os campos ficam logo abaixo dele.
+        const camposIdentidade = formContainer.querySelector('#cred-identidade-campos');
+        if (camposIdentidade) {
+            camposIdentidade.style.marginTop = '8px';
+            docContainer.appendChild(camposIdentidade);
+        }
+
         docRow.remove();
 
-        // Inserir imediatamente após o cabeçalho "Dados Pessoais", antes dos campos CPF/RG/Nacionalidade
-        const header = formContainer.querySelector('.cred-section-group-header');
-        if (header && header.nextSibling) {
-            formContainer.insertBefore(docContainer, header.nextSibling);
-        } else {
-            formContainer.appendChild(docContainer);
-        }
+        // Inserir no formContainer. A subseção II é o primeiro bloco do formContainer
+        // (o cabeçalho "Preenchimento de Dados Pessoais" fica fora, no modalBody, acima da Ficha I).
+        formContainer.appendChild(docContainer);
     }
 
     /**
@@ -1323,6 +1371,36 @@
             } else {
                 modalBody.insertBefore(docContainer, modalBody.firstChild);
             }
+        }
+    }
+
+    /**
+     * Injeta os dois cabeçalhos de grupo de seção que separam o modal em duas etapas:
+     *  - "Preenchimento de Dados Pessoais": acima da subseção I (Ficha de Inscrição).
+     *  - "Verificação de Documentos": logo acima da tabela nativa com o restante dos anexos.
+     * Deve ser chamada APÓS os movers (moverFichaInscricao/DocIdentidade/DocPIS), pois
+     * depende de #cred-ficha-inscricao e da tabela nativa já estarem posicionados.
+     */
+    function injetarHeadersSecao(modal, modalBody) {
+        const criarHeader = (id, texto) => {
+            const h = document.createElement('div');
+            h.id = id;
+            h.className = 'cred-section-group-header';
+            h.textContent = texto;
+            return h;
+        };
+
+        // Header 1 — "Preenchimento de Dados Pessoais", acima da Ficha de Inscrição (I)
+        if (!document.getElementById('cred-header-preenchimento')) {
+            const ficha = modalBody.querySelector('#cred-ficha-inscricao');
+            const ancora = ficha || modalBody.firstChild;
+            if (ancora) modalBody.insertBefore(criarHeader('cred-header-preenchimento', 'Preenchimento de Dados Pessoais'), ancora);
+        }
+
+        // Header 2 — "Verificação de Documentos", logo acima da tabela nativa de anexos
+        if (!document.getElementById('cred-header-verificacao')) {
+            const tabela = modal.querySelector('.div_lista_aprovacao_anexos');
+            if (tabela) tabela.parentNode.insertBefore(criarHeader('cred-header-verificacao', 'Verificação de Documentos'), tabela);
         }
     }
 
@@ -1677,7 +1755,7 @@
 
         // Desabilitar inputs e botões interativos do formulário
         modal.querySelectorAll(
-            '#cred-form-container input, #cred-nome-input, #cred-nome-confirmado'
+            '#cred-form-container input, #cred-ficha-inscricao input, #cred-nome-input, #cred-nome-confirmado'
         ).forEach(el => { el.disabled = true; });
         modal.querySelectorAll(
             '.cred-toggle-btn, .cred-estadocivil-btn, .cred-simnao-btn'
@@ -1712,7 +1790,7 @@
 
         // Re-habilitar inputs e botões
         modal.querySelectorAll(
-            '#cred-form-container input, #cred-nome-input, #cred-nome-confirmado'
+            '#cred-form-container input, #cred-ficha-inscricao input, #cred-nome-input, #cred-nome-confirmado'
         ).forEach(el => { el.disabled = false; });
         modal.querySelectorAll(
             '.cred-toggle-btn, .cred-estadocivil-btn, .cred-simnao-btn'
@@ -3026,6 +3104,10 @@
                 if (fichaInscricao) fichaInscricao.remove();
                 const outrosAnexos = document.getElementById('cred-outros-anexos');
                 if (outrosAnexos) outrosAnexos.remove();
+                ['cred-header-preenchimento', 'cred-header-verificacao'].forEach(id => {
+                    const h = document.getElementById(id);
+                    if (h) h.remove();
+                });
                 const btnCopiar = document.getElementById('cred-btn-executar');
                 if (btnCopiar) btnCopiar.remove();
                 // Restaurar header original

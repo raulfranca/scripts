@@ -54,13 +54,14 @@
 |---|---|
 | `abrirModalTabela` | Clica em `a.link_tabela_revisao_anexos`; retorna `false` se não encontrado no DOM |
 | `aguardarModalEInjetar` | Polling (100ms, até 10s) aguarda `#modal_aprovacao_anexos` visível e com tabela carregada; chama `injetarControlesNoModal` |
-| `criarFormulario` | Retorna `<div id="cred-form-container">` com campos: CPF, RG, Nacionalidade, Estado civil, Celular, E-mail, Função, Regiões |
+| `criarFormulario` | Retorna `<div id="cred-form-container">` com todos os campos, pré-agrupados por documento-fonte: `#cred-identidade-campos` (CPF/RG/Nacionalidade/Nascimento, anexo II) e `#cred-ficha-campos` (Estado civil, Endereço, E-mail/Celular, Conta Santander, Função, Regiões — anexo I). Os movers realocam esses grupos para dentro das subseções dos anexos |
 | `formatarCelular` | Formata string de dígitos em `(00) 00000-0000` (11 dígitos) ou `(00) 0000-0000` (10 dígitos); progressivo durante digitação |
-| `registrarEventListenersFormulario` | Registra máscaras progressivas e handlers dos campos: CPF, RG, Nacionalidade, Estado civil, Celular, E-mail, Função (toggle múltiplo), Regiões (toggle múltiplo) |
+| `registrarEventListenersFormulario` | Registra máscaras progressivas e handlers dos campos: CPF, RG, Nacionalidade, Estado civil, Celular, E-mail, Função (toggle múltiplo), Regiões (toggle múltiplo). Auto-save delegado registrado em `#cred-form-container` **e** `#cred-ficha-campos` (os campos gerais foram movidos para fora do form-container) |
 | `injetarControlesNoModal` | **Orquestrador principal**: injeta header, info-block, formulário, ficha, outros-anexos, botões Sim/Não e footer; guard via atributo `data-cred-injetado`; chama `resetarEstadoCandidato` e `executarFluxo` |
-| `moverFichaInscricao` | Remove linha "I - Ficha de Inscrição" da tabela nativa e a reposiciona como `<div id="cred-ficha-inscricao">` acima do formulário; chama `adicionarColunaStatusNaTabela` para categoria `'I'` |
-| `moverDocIdentidade` | Remove linha "II – Cópia de documento de Identidade..." da tabela nativa e a injeta como `<div id="cred-doc-identidade">` no final do `formContainer` (seção Dados Pessoais); chama `adicionarColunaStatusNaTabela` para categoria `'II'`; pula categoria II em `injetarBotoesCategorias` |
+| `moverFichaInscricao` | Remove linha "I - Ficha de Inscrição" da tabela nativa e a reposiciona como `<div id="cred-ficha-inscricao">` acima do formulário; chama `adicionarColunaStatusNaTabela` para categoria `'I'`; **move a linha de campos `#cred-ficha-campos` (Estado civil, Endereço, E-mail/Celular, Conta Santander, Função, Regiões) para dentro dessa subseção**, logo abaixo do anexo/aviso — mesmo padrão de II e VI |
+| `moverDocIdentidade` | Remove linha "II – Cópia de documento de Identidade..." da tabela nativa e a injeta como `<div id="cred-doc-identidade">` logo após o cabeçalho "Dados Pessoais" no `formContainer`; **move a linha de campos `#cred-identidade-campos` (CPF/RG/Nacionalidade/Data de Nascimento) para dentro dessa subseção**, logo abaixo do anexo — mesmo padrão de `moverDocPIS` (VI + número do PIS); chama `adicionarColunaStatusNaTabela` para categoria `'II'`; pula categoria II em `injetarBotoesCategorias` |
 | `moverDocPIS` | Remove linha "VI – Cópia da inscrição do PIS/PASEP/NIT" da tabela nativa e a injeta como `<div id="cred-doc-pis">` (`.cred-ficha-section`) **logo abaixo da subseção II** (`#cred-doc-identidade`), dentro de `formContainer` (recebe `formContainer` como 3º parâmetro; fallback: após a Ficha de Inscrição no `modalBody`, ou no topo do `modalBody`); contém o anexo, os botões Sim/Não da categoria `'VI'` e o campo `#cred-pis` (número do PIS) logo abaixo. Registra o listener do PIS (input criado dinamicamente). Pula categoria VI em `injetarBotoesCategorias` |
+| `injetarHeadersSecao` | Injeta os dois cabeçalhos de grupo (`.cred-section-group-header`): `#cred-header-preenchimento` ("Preenchimento de Dados Pessoais") acima de `#cred-ficha-inscricao`, e `#cred-header-verificacao` ("Verificação de Documentos") acima de `.div_lista_aprovacao_anexos`. Guards por id evitam duplicação. Chamada após os movers |
 | `injetarOutrosAnexos` | Compara IDs de `#table_anexos_filhos` com os já no modal (via parâmetro `iea` base64); injeta linha `#cred-outros-anexos` com anexos avulsos de despachos posteriores |
 | `criarGrupoBotoes` | Cria `<div class="cred-simnao-group" data-categoria="…">` com botões Sim/Não; toggle: clique duplo deseleciona; atualiza `avaliacoesDocs` e chama `atualizarChipHabilitacao` |
 | `adicionarColunaStatusNaTabela` | Reutiliza coluna "Status da revisão" da inner table; injeta `criarGrupoBotoes` com `rowspan`; oculta botões "Revisar" nativos; fallback: adiciona coluna no final |
@@ -128,8 +129,12 @@
 |---|---|---|
 | `btn-credenciamento` | `injetarBotao` | Botão "Credenciamento" na barra do 1Doc |
 | `cred-form-container` | `criarFormulario` | Container com todos os campos do candidato |
-| `cred-ficha-inscricao` | `moverFichaInscricao` | Bloco destacado com a Ficha de Inscrição |
-| `cred-doc-identidade` | `moverDocIdentidade` | Bloco com o doc de identidade (categoria II) injetado ao final do `formContainer`, dentro de Dados Pessoais |
+| `cred-header-preenchimento` | `injetarHeadersSecao` | Cabeçalho de grupo "Preenchimento de Dados Pessoais", acima de `#cred-ficha-inscricao` |
+| `cred-header-verificacao` | `injetarHeadersSecao` | Cabeçalho de grupo "Verificação de Documentos", acima de `.div_lista_aprovacao_anexos` |
+| `cred-ficha-inscricao` | `moverFichaInscricao` | Bloco destacado com a Ficha de Inscrição (categoria I); contém o anexo, o aviso e, dentro, a linha `#cred-ficha-campos` |
+| `cred-ficha-campos` | `criarFormulario` (movido por `moverFichaInscricao`) | Wrapper com os campos gerais lidos da ficha (Estado civil, Endereço, E-mail/Celular, Conta Santander, Função, Regiões); nasce no template e é realocado para dentro de `#cred-ficha-inscricao` |
+| `cred-doc-identidade` | `moverDocIdentidade` | Bloco com o doc de identidade (categoria II), primeiro bloco de `#cred-form-container` (abaixo da Ficha I); contém o anexo II e, dentro, a linha `#cred-identidade-campos` |
+| `cred-identidade-campos` | `criarFormulario` (movido por `moverDocIdentidade`) | Linha `.cred-form-section` com CPF/RG/Nacionalidade/Data de Nascimento; nasce no template e é realocada para dentro de `#cred-doc-identidade` |
 | `cred-outros-anexos` | `injetarOutrosAnexos` | Linha na tabela com anexos avulsos de despachos |
 | `cred-btn-duvida` | `injetarControlesNoModal` | Botão "Dúvida" (vermelho) no footer; visível apenas enquanto `_estaCompleto()` é falso |
 | `cred-btn-executar` | `injetarControlesNoModal` | Botão "Copiar"/"Processando..." no footer do modal |
@@ -169,6 +174,8 @@ setInterval (500ms)
                ├─ criarFormulario
                ├─ moverFichaInscricao
                │    └─ adicionarColunaStatusNaTabela → criarGrupoBotoes → atualizarChipHabilitacao + agendarSalvarProgresso
+               ├─ moverDocIdentidade (II) · moverDocPIS (VI)
+               ├─ injetarHeadersSecao   ← "Preenchimento de Dados Pessoais" + "Verificação de Documentos"
                ├─ injetarOutrosAnexos
                ├─ injetarBotoesCategorias
                │    └─ adicionarColunaStatusNaTabela (loop)
