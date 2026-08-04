@@ -500,6 +500,52 @@ function navegarInbox() {
 
 > Use `location.origin` como fallback caso a chave não exista (ex: primeiro acesso após limpar localStorage).
 
+### 5.11 Leitura de `.xlsx` em Userscript sem Dependências Externas
+
+Scripts com `@match` amplo (ex: `https://*.1doc.com.br/*`) rodam em **toda** página do domínio — carregar uma biblioteca de planilha (SheetJS etc.) via `@require`/CDN penaliza todas elas por causa de uma única tela de import. Como `.xlsx` é apenas um ZIP contendo XML, dá para ler com APIs nativas do navegador (Chrome/Edge 103+):
+
+**1. ZIP: caminhar o diretório central, não escanear o arquivo inteiro.** O índice de arquivos de um ZIP fica no fim (EOCD → diretório central), não espalhado pelo arquivo. Varra de trás pra frente à procura da assinatura EOCD (`0x06054b50`) — o campo de comentário (0–65535 bytes) impede assumir uma posição fixa a partir do fim:
+
+```javascript
+const EOCD_SIG = 0x06054b50;
+let eocdPos = -1;
+const minPos = Math.max(0, bytes.length - 22 - 65535);
+for (let i = bytes.length - 22; i >= minPos; i--) {
+    if (view.getUint32(i, true) === EOCD_SIG) { eocdPos = i; break; }
+}
+```
+
+A partir do EOCD: `totalEntradas` (offset +10, uint16) e `offsetCD` (offset +16, uint32) apontam para o diretório central, uma sequência de registros `0x02014b50` (nome, método de compressão, tamanho comprimido, **offset do cabeçalho local**). O cabeçalho local (`0x04034b50`) tem campos de nome/extra que podem ter tamanho **diferente** do central — sempre releia `nomeLen`/`extraLen` do cabeçalho local antes de calcular onde os dados do arquivo começam (`offsetLocal + 30 + nomeLenLocal + extraLenLocal`).
+
+**2. Inflar via `DecompressionStream` nativo — sem CRC, sem zlib manual.** Método de compressão `8` = deflate; o navegador já sabe descomprimir:
+
+```javascript
+async function inflar(bytesComprimidos) {
+    const stream = new Blob([bytesComprimidos]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+```
+
+`'deflate-raw'` (sem cabeçalho zlib) é o que o formato ZIP usa — `'deflate'` (com cabeçalho zlib) falha silenciosamente ou lança erro. Método `0` = "stored" (sem compressão), copiar os bytes direto.
+
+**3. Estrutura interna do `.xlsx` relevante para leitura de dados:**
+* `xl/sharedStrings.xml` — strings reaproveitadas entre células (`<si><t>texto</t></si>`); células tipo `t="s"` guardam o **índice** nesse array, não o texto.
+* `xl/worksheets/sheetN.xml` — uma aba; cada `<row r="4">` contém `<c r="B4" t="s"><v>12</v></c>` (índice em sharedStrings) ou sem `t` (numérico puro, inclusive datas/horas) ou `t="inlineStr"` (`<is><t>texto</t></is>`, texto embutido sem sharedStrings).
+* **Datas são número serial**, não string — dias desde `30/12/1899` (Excel preserva o "bug" do ano bissexto de 1900 do Lotus 1-2-3 de propósito, por compatibilidade):
+  ```javascript
+  function serialParaData(serial) {
+      const n = Math.floor(Number(serial)); // descarta a fração (hora do dia)
+      const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+      return `${String(d.getUTCDate()).padStart(2,'0')}/${String(d.getUTCMonth()+1).padStart(2,'0')}/${d.getUTCFullYear()}`;
+  }
+  ```
+* **Hyperlinks não ficam na célula** — a sheet tem `<hyperlinks><hyperlink ref="B4" r:id="rId1"/></hyperlinks>` e o `.rels` irmão (`xl/worksheets/_rels/sheetN.xml.rels`) resolve `rId1` → URL real via `<Relationship Id="rId1" Target="https://..."/>`. Sem juntar os dois arquivos, o link se perde.
+* **Não assumir número de linha fixo para o cabeçalho** — arquivos exportados de sistemas costumam ter linhas de título mescladas (`<mergeCell ref="A1:O1"/>`) antes do cabeçalho real. Localize a linha de cabeçalho pelo **conteúdo** (ex: primeira linha cujas células contêm os nomes de coluna esperados), não por posição.
+
+**4. `DOMParser('application/xml')` para o XML interno** — mesmo tratamento de qualquer XML no navegador; tags sem prefixo (`row`, `c`, `v`, `t`, `si`, `is`) são acessíveis via `getElementsByTagName` direto; atributos prefixados (`r:id` em `<hyperlink r:id="rId1"/>`) via `getAttribute('r:id')` (a forma não-namespace-aware casa a string qualificada como está na origem, sem precisar de `getAttributeNS`).
+
+> **Verificação fora do navegador:** Node (`v18+`) tem `DecompressionStream` nativo mas **não** tem `DOMParser`. Para validar a camada binária (ZIP + inflate) sem depender do navegador, rode o código de leitura do ZIP verbatim em Node e compare tamanhos/conteúdo com o que `zipfile`/`xml.etree` do Python (biblioteca padrão) extraem do mesmo arquivo — cobre o código mais arriscado (parsing binário manual) com uma referência independente. A camada de regras de negócio (mapeamento de colunas, filtros) pode ser replicada 1:1 em Python para conferir os totais, já que ambos os ambientes andam a mesma árvore XML padrão.
+
 ## 6. Diretrizes de Layout e Estilo (UI/UX)
 
 Para manter a consistência visual, os elementos injetados devem parecer nativos do 1Doc ou usar padrões neutros e modernos. Utilize `GM_addStyle` para injetar CSS.

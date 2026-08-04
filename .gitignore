@@ -1,0 +1,9 @@
+# Planilhas e dados de referência — contêm dados pessoais (CPF, PIS, endereço,
+# e-mail, celular) de professores. NUNCA versionar: manter apenas localmente.
+1doc/credenciamento/ref/
+*.xlsx
+*.xls
+*.csv
+
+# Exports do próprio script (folha-frequencia-*.json contém a lista de professores)
+folha-frequencia-*.json

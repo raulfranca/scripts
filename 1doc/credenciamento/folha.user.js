@@ -15,11 +15,14 @@
 
     // ─── 1. KEYS ─────────────────────────────────────────────────────────────
 
-    const LS_LISTA     = '1doc_folha_lista';     // array: {nome, numero}
+    const LS_LISTA     = '1doc_folha_lista';     // array: {nome, numero, url, registro, cpf, email, celular, pis, nascimento, assinatura, cep, logradouro, enderecoNumero, bairro, cidade, horas}
     const LS_COLETADOS = '1doc_folha_coletados'; // array: números já coletados
+    const LS_PULADOS   = '1doc_folha_pulados';   // array: números pulados (seguem pendentes, mas não são sugeridos como "próximo")
     const LS_MODO      = '1doc_folha_modo';      // 'entrada' | 'coleta'
     const LS_MES       = '1doc_folha_mes';       // string: mês de referência, ex: 'ABR-26'
     const LS_INBOX_URL = '1doc_folha_inbox_url'; // URL do inbox salva ao entrar nele
+    const LS_ARQUIVO   = '1doc_folha_arquivo';   // {nome, ts, total, importados, descartados} — resumo do último import
+    const LS_AVANCO    = '1doc_folha_avanco';    // {numero, ts} — gravado ao clicar em Enviar; consumido por verificarAvancoPendente
 
     const MESES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
 
@@ -27,72 +30,22 @@
 
     function lerLista()     { try { return JSON.parse(localStorage.getItem(LS_LISTA)     || '[]'); } catch { return []; } }
     function lerColetados() { try { return JSON.parse(localStorage.getItem(LS_COLETADOS) || '[]'); } catch { return []; } }
+    function lerPulados()   { try { return JSON.parse(localStorage.getItem(LS_PULADOS)   || '[]'); } catch { return []; } }
     function lerModo()      { return localStorage.getItem(LS_MODO) || 'entrada'; }
     function lerMes()       { return localStorage.getItem(LS_MES)  || ''; }
     function lerInboxUrl()  { return localStorage.getItem(LS_INBOX_URL) || location.origin; }
     function navegarInbox() { location.href = lerInboxUrl(); }
+    function lerArquivoInfo() { try { return JSON.parse(localStorage.getItem(LS_ARQUIVO) || 'null'); } catch { return null; } }
 
-    function salvarLista(lista) { localStorage.setItem(LS_LISTA, JSON.stringify(lista)); }
+    function salvarLista(lista)     { localStorage.setItem(LS_LISTA, JSON.stringify(lista)); }
+    function salvarPulados(lista)   { localStorage.setItem(LS_PULADOS, JSON.stringify(lista)); }
 
-    // Parseia CSV com cabeçalho (Professor\tProtocolo\tCPF\t...) ou formatos legados
-    function parsearEntrada(texto) {
-        const protoRegex = /(\d+\.\d{3}\/\d{4})/;
-        const vistos     = new Set();
-        const resultado  = [];
-        const linhas     = texto.split('\n').map(l => l.trim()).filter(Boolean);
-        if (linhas.length === 0) return resultado;
-
-        // Detectar cabeçalho pela presença das palavras-chave nas colunas
-        const primeira      = linhas[0].toLowerCase();
-        const temCabecalho  = primeira.includes('protocolo') || primeira.includes('professor');
-
-        let colNome = 0, colNumero = 1, colCpf = -1, colCidade = -1,
-            colEmail = -1, colCelular = -1, colPis = -1, colFolha = -1;
-        let inicioLinha = 0;
-
-        if (temCabecalho) {
-            const cols = linhas[0].split('\t').map(c => c.trim().toLowerCase());
-            colNome    = cols.findIndex(c => c === 'professor');
-            colNumero  = cols.findIndex(c => c === 'protocolo');
-            colCpf     = cols.findIndex(c => c === 'cpf');
-            colCidade  = cols.findIndex(c => c === 'cidade');
-            colEmail   = cols.findIndex(c => c.includes('e-mail') || c === 'email');
-            colCelular = cols.findIndex(c => c === 'celular');
-            colPis     = cols.findIndex(c => c.includes('pis'));
-            colFolha   = cols.findIndex(c => c.includes('folha'));
-            inicioLinha = 1;
-        }
-
-        linhas.slice(inicioLinha).forEach(linha => {
-            const partes = linha.split('\t');
-            let nome = '', numero = '', cpf = '', cidade = '', email = '', celular = '', pis = '', folhaEnviada = '';
-
-            if (temCabecalho) {
-                nome         = colNome    >= 0 ? (partes[colNome]    || '').trim() : '';
-                const raw    = colNumero  >= 0 ? (partes[colNumero]  || '').trim() : '';
-                const m      = raw.match(protoRegex) || linha.match(protoRegex);
-                if (m) numero = m[1];
-                cpf          = colCpf     >= 0 ? (partes[colCpf]     || '').trim() : '';
-                cidade       = colCidade  >= 0 ? (partes[colCidade]  || '').trim() : '';
-                email        = colEmail   >= 0 ? (partes[colEmail]   || '').trim() : '';
-                celular      = colCelular >= 0 ? (partes[colCelular] || '').trim() : '';
-                pis          = colPis     >= 0 ? (partes[colPis]     || '').trim() : '';
-                folhaEnviada = colFolha   >= 0 ? (partes[colFolha]   || '').trim() : '';
-            } else if (partes.length >= 2) {
-                // Formato legado: Nome\tProtocolo
-                nome = partes[0].trim();
-                const m = partes[partes.length - 1].match(protoRegex);
-                if (m) numero = m[1];
-            } else {
-                const m = linha.match(protoRegex);
-                if (m) numero = m[1];
-            }
-
-            if (!numero || vistos.has(numero)) return;
-            vistos.add(numero);
-            resultado.push({ nome, numero, cpf, cidade, email, celular, pis, folhaEnviada });
-        });
-        return resultado;
+    function escapeHtml(str) {
+        return String(str ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
     }
 
     // Helpers para trabalhar com lista de objetos
@@ -102,6 +55,278 @@
     function coletadosNumeros() { return lerColetados().map(c => typeof c === 'string' ? c : c.numero); }
     function urlColetado(n)     { const c = lerColetados().find(c => (typeof c === 'string' ? c : c.numero) === n); return c && typeof c === 'object' ? c.url : ''; }
 
+    // Primeiro item da lista com link, ainda não coletado nem pulado — a "fila" de trabalho
+    function proximoPendente() {
+        const coletados = coletadosNumeros();
+        const pulados    = lerPulados();
+        return lerLista().find(e => e.url && !coletados.includes(e.numero) && !pulados.includes(e.numero)) || null;
+    }
+
+    // Navega na mesma aba para o protocolo do item da lista (decisão do usuário: sem janela dedicada)
+    function abrirProtocolo(entrada) {
+        if (!entrada || !entrada.url) return;
+        location.href = entrada.url;
+    }
+
+    // ─── 2B. LEITURA DE PLANILHA (.xlsx) ────────────────────────────────────
+    // Sem dependências externas: o .xlsx é um ZIP com XML dentro. Lemos o
+    // diretório central do ZIP, inflamos as entradas via DecompressionStream
+    // nativo do navegador (Chrome/Edge 103+) e parseamos o XML com DOMParser.
+
+    function parseXml(texto) {
+        const doc = new DOMParser().parseFromString(texto, 'application/xml');
+        if (doc.getElementsByTagName('parsererror').length > 0) {
+            throw new Error('Arquivo XML corrompido dentro do .xlsx.');
+        }
+        return doc;
+    }
+
+    async function inflar(bytesComprimidos) {
+        const stream = new Blob([bytesComprimidos]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+    }
+
+    // Lê o diretório central do ZIP e devolve Map<nomeArquivo, Uint8Array> com todo o conteúdo já descomprimido
+    async function lerZip(buffer) {
+        const view  = new DataView(buffer);
+        const bytes = new Uint8Array(buffer);
+
+        // EOCD (End Of Central Directory): varre de trás pra frente — o campo de comentário
+        // (0–65535 bytes) impede assumir uma posição fixa a partir do fim do arquivo.
+        const EOCD_SIG = 0x06054b50;
+        let eocdPos = -1;
+        const minPos = Math.max(0, bytes.length - 22 - 65535);
+        for (let i = bytes.length - 22; i >= minPos; i--) {
+            if (view.getUint32(i, true) === EOCD_SIG) { eocdPos = i; break; }
+        }
+        if (eocdPos === -1) throw new Error('Arquivo ZIP inválido: fim do diretório central (EOCD) não encontrado.');
+
+        const totalEntradas = view.getUint16(eocdPos + 10, true);
+        const offsetCD       = view.getUint32(eocdPos + 16, true);
+
+        const CD_SIG = 0x02014b50;
+        const entradas = [];
+        let ptr = offsetCD;
+        for (let i = 0; i < totalEntradas; i++) {
+            if (view.getUint32(ptr, true) !== CD_SIG) throw new Error('Arquivo ZIP inválido: assinatura de diretório central incorreta.');
+            const method      = view.getUint16(ptr + 10, true);
+            const compSize    = view.getUint32(ptr + 20, true);
+            const nomeLen     = view.getUint16(ptr + 28, true);
+            const extraLen    = view.getUint16(ptr + 30, true);
+            const comentLen   = view.getUint16(ptr + 32, true);
+            const offsetLocal = view.getUint32(ptr + 42, true);
+            const nome = new TextDecoder().decode(bytes.subarray(ptr + 46, ptr + 46 + nomeLen));
+            entradas.push({ nome, offsetLocal, compSize, method });
+            ptr += 46 + nomeLen + extraLen + comentLen;
+        }
+
+        const arquivos = new Map();
+        for (const { nome, offsetLocal, compSize, method } of entradas) {
+            if (nome.endsWith('/')) continue; // diretório, sem conteúdo
+            const nomeLenLocal  = view.getUint16(offsetLocal + 26, true);
+            const extraLenLocal = view.getUint16(offsetLocal + 28, true);
+            const dataStart = offsetLocal + 30 + nomeLenLocal + extraLenLocal;
+            const comp = bytes.subarray(dataStart, dataStart + compSize);
+            let dados;
+            if (method === 0) dados = comp; // stored (sem compressão)
+            else if (method === 8) dados = await inflar(comp); // deflate
+            else throw new Error(`Método de compressão não suportado (${method}) em "${nome}".`);
+            arquivos.set(nome, dados);
+        }
+        return arquivos;
+    }
+
+    function parseSharedStrings(xmlBytes) {
+        if (!xmlBytes) return [];
+        const doc = parseXml(new TextDecoder('utf-8').decode(xmlBytes));
+        return Array.from(doc.getElementsByTagName('si')).map(si =>
+            Array.from(si.getElementsByTagName('t')).map(t => t.textContent).join('')
+        );
+    }
+
+    function parseSheetXml(xmlBytes, sharedStrings) {
+        const doc = parseXml(new TextDecoder('utf-8').decode(xmlBytes));
+        const linhas = [];
+        Array.from(doc.getElementsByTagName('row')).forEach(rowEl => {
+            const r = parseInt(rowEl.getAttribute('r'), 10);
+            const cells = {};
+            Array.from(rowEl.getElementsByTagName('c')).forEach(c => {
+                const ref = c.getAttribute('r');
+                if (!ref) return;
+                const col = ref.replace(/\d+/g, '');
+                const tipo = c.getAttribute('t');
+                let valor = '';
+                if (tipo === 'inlineStr') {
+                    const isEl = c.getElementsByTagName('is')[0];
+                    valor = isEl ? Array.from(isEl.getElementsByTagName('t')).map(t => t.textContent).join('') : '';
+                } else {
+                    const vEl = c.getElementsByTagName('v')[0];
+                    const raw = vEl ? vEl.textContent : '';
+                    valor = (tipo === 's') ? (sharedStrings[parseInt(raw, 10)] || '') : raw;
+                }
+                cells[col] = valor;
+            });
+            linhas.push({ r, cells });
+        });
+        return linhas;
+    }
+
+    // Hyperlinks da planilha: <hyperlink ref="B4" r:id="rId1"/> na sheet + <Relationship Id="rId1" Target="..."/> no .rels
+    function parseHyperlinks(sheetXmlBytes, relsXmlBytes) {
+        const links = {};
+        if (!relsXmlBytes) return links;
+        const relMap = {};
+        const relsDoc = parseXml(new TextDecoder('utf-8').decode(relsXmlBytes));
+        Array.from(relsDoc.getElementsByTagName('Relationship')).forEach(rel => {
+            relMap[rel.getAttribute('Id')] = rel.getAttribute('Target');
+        });
+        const sheetDoc = parseXml(new TextDecoder('utf-8').decode(sheetXmlBytes));
+        Array.from(sheetDoc.getElementsByTagName('hyperlink')).forEach(h => {
+            const ref = h.getAttribute('ref');
+            const rid = h.getAttribute('r:id');
+            if (ref && rid && relMap[rid]) links[ref] = relMap[rid];
+        });
+        return links;
+    }
+
+    // Serial de data do Excel (época 30/12/1899) → 'DD/MM/AAAA'. Math.floor descarta a fração de hora.
+    function serialParaData(serial) {
+        const n = Math.floor(Number(serial));
+        if (!Number.isFinite(n) || n <= 0) return '';
+        const d = new Date(Date.UTC(1899, 11, 30) + n * 86400000);
+        const dd   = String(d.getUTCDate()).padStart(2, '0');
+        const mm   = String(d.getUTCMonth() + 1).padStart(2, '0');
+        const aaaa = d.getUTCFullYear();
+        return `${dd}/${mm}/${aaaa}`;
+    }
+
+    // Extrai 'AAAA-MM-DD' do nome do arquivo (padrão de export: horas-trabalhadas_AAAA-MM-DD_a_AAAA-MM-DD.xlsx) → 'MES-AA'
+    function mesDoNomeArquivo(nomeArquivo) {
+        const m = (nomeArquivo || '').match(/(\d{4})-(\d{2})-\d{2}/);
+        if (!m) return '';
+        const mesIdx = parseInt(m[2], 10) - 1;
+        if (mesIdx < 0 || mesIdx > 11) return '';
+        return `${MESES[mesIdx]}-${m[1].slice(-2)}`;
+    }
+
+    function normalizarCabecalho(txt) {
+        // NFD decompõe acentos em base + diacrítico; remove as marcas combinantes (acentos) na faixa Unicode U+0300-U+036F
+        return (txt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    }
+
+    // Extrai { linhas, links } da primeira aba do .xlsx (menor número em xl/worksheets/sheetN.xml)
+    async function lerXlsx(file) {
+        const buffer = await file.arrayBuffer();
+        const zip    = await lerZip(buffer);
+
+        const sharedStrings = parseSharedStrings(zip.get('xl/sharedStrings.xml'));
+
+        const nomesAbas = Array.from(zip.keys())
+            .filter(n => /^xl\/worksheets\/sheet\d+\.xml$/.test(n))
+            .sort((a, b) => parseInt(a.match(/sheet(\d+)/)[1], 10) - parseInt(b.match(/sheet(\d+)/)[1], 10));
+        if (nomesAbas.length === 0) throw new Error('Nenhuma planilha (aba) encontrada dentro do arquivo .xlsx.');
+
+        const nomeAba = nomesAbas[0];
+        const numAba  = nomeAba.match(/sheet(\d+)/)[1];
+        const sheetBytes = zip.get(nomeAba);
+        const relsBytes   = zip.get(`xl/worksheets/_rels/sheet${numAba}.xml.rels`);
+
+        return {
+            linhas: parseSheetXml(sheetBytes, sharedStrings),
+            links: parseHyperlinks(sheetBytes, relsBytes),
+        };
+    }
+
+    // Orquestra a leitura: localiza o cabeçalho, mapeia colunas por nome, filtra horas > 0, deduplica por protocolo
+    async function parsearPlanilha(file) {
+        if (!window.DecompressionStream) {
+            throw new Error('Navegador sem suporte à leitura de .xlsx (é necessário Chrome/Edge 103+).');
+        }
+
+        const { linhas, links } = await lerXlsx(file);
+        if (linhas.length === 0) throw new Error('Planilha vazia.');
+
+        // Cabeçalho: primeira linha que contém "protocolo" e "professor" em alguma célula (não assume posição fixa)
+        const headerRow = linhas.find(linha => {
+            const textos = Object.values(linha.cells).map(normalizarCabecalho);
+            return textos.some(t => t.includes('protocolo')) && textos.some(t => t.includes('professor'));
+        });
+        if (!headerRow) throw new Error('Não foi possível localizar o cabeçalho ("Protocolo" e "Professor") na planilha.');
+
+        const mapaCampos = {
+            protocolo:      ['protocolo'],
+            nome:           ['professor'],
+            cpf:            ['cpf'],
+            email:          ['e-mail', 'email'],
+            celular:        ['celular'],
+            pis:            ['pis'],
+            nascimento:     ['data de nascimento'],
+            assinatura:     ['data de assinatura'],
+            cep:            ['cep'],
+            logradouro:     ['logradouro'],
+            enderecoNumero: ['numero'],
+            bairro:         ['bairro'],
+            cidade:         ['cidade'],
+            horas:          ['horas trabalhadas'],
+            registro:       ['registro'],
+        };
+        const colunaPorCampo = {};
+        Object.entries(headerRow.cells).forEach(([col, texto]) => {
+            const norm = normalizarCabecalho(texto);
+            for (const [campo, alvos] of Object.entries(mapaCampos)) {
+                if (colunaPorCampo[campo]) continue;
+                if (alvos.some(alvo => norm.includes(alvo))) colunaPorCampo[campo] = col;
+            }
+        });
+        if (!colunaPorCampo.protocolo || !colunaPorCampo.nome) {
+            throw new Error('Colunas obrigatórias "Protocolo 1Doc" e "Professor Credenciado" não encontradas.');
+        }
+
+        const protoRegex = /(\d+\.\d{3}\/\d{4})/;
+        const vistos = new Set();
+        let total = 0, descartados = 0;
+        const registros = [];
+
+        const idxHeader = linhas.indexOf(headerRow);
+        linhas.slice(idxHeader + 1).forEach(linha => {
+            const get = campo => {
+                const col = colunaPorCampo[campo];
+                return col ? String(linha.cells[col] || '').trim() : '';
+            };
+            const m = get('protocolo').match(protoRegex);
+            if (!m) return; // linha sem protocolo válido (ex: rodapé, linha em branco)
+            const numero = m[1];
+            if (vistos.has(numero)) return;
+
+            total++;
+
+            const horas = parseFloat(get('horas').replace(',', '.')) || 0;
+            if (horas <= 0) { descartados++; return; } // decisão do usuário: só importa quem trabalhou
+
+            vistos.add(numero);
+            registros.push({
+                nome: get('nome'),
+                numero,
+                url: links[`${colunaPorCampo.protocolo}${linha.r}`] || '',
+                registro: get('registro'),
+                cpf: get('cpf').replace(/\D/g, ''),
+                email: get('email'),
+                celular: get('celular').replace(/\D/g, ''),
+                pis: get('pis').replace(/\D/g, ''),
+                nascimento: serialParaData(get('nascimento')),
+                assinatura: serialParaData(get('assinatura')),
+                cep: get('cep').replace(/\D/g, ''),
+                logradouro: get('logradouro'),
+                enderecoNumero: get('enderecoNumero'),
+                bairro: get('bairro'),
+                cidade: get('cidade'),
+                horas,
+            });
+        });
+
+        return { registros, total, descartados, mes: mesDoNomeArquivo(file.name) };
+    }
+
     // ─── 3. DISPATCH ─────────────────────────────────────────────────────────
 
     if (location.href.includes('pg=painel') && !location.href.includes('pg=painel/ver')) {
@@ -109,6 +334,7 @@
     } else if (location.href.includes('pg=doc/ver') && lerModo() === 'coleta') {
         iniciarPaginaProtocolo();
     }
+    verificarAvancoPendente(); // independente do modo — cobre os dois destinos possíveis após o envio
 
     // ════════════════════════════════════════════════════════════════════════
     // INBOX
@@ -332,15 +558,77 @@
 
     // ── Modo Entrada ───────────────────────────────────────────────────────
     function renderizarModoEntrada(painel) {
-        const lista    = lerLista();
-        const mesAtual = lerMes();
-        const ano      = String(new Date().getFullYear()).slice(-2);
+        const lista       = lerLista();
+        const arquivoInfo = lerArquivoInfo();
+
+        // ── Import da planilha ────────────────────────────────────────────
+        const labelImport = document.createElement('label');
+        labelImport.style.cssText = 'display:block;font-size:12px;color:#555;margin-bottom:4px;';
+        labelImport.textContent = 'Planilha de horas trabalhadas (.xlsx):';
+        painel.appendChild(labelImport);
+
+        const dropZone = document.createElement('div');
+        dropZone.id = 'folha-dropzone';
+        dropZone.style.cssText = [
+            'border:2px dashed #ccc', 'border-radius:6px',
+            'padding:14px 10px', 'text-align:center',
+            'font-size:12px', 'color:#888', 'cursor:pointer',
+            'margin-bottom:6px', 'transition:background 0.15s,border-color 0.15s',
+        ].join(';');
+        dropZone.innerHTML = '📂 <strong style="color:#2980b9;">Importar planilha</strong> ou arraste aqui';
+        painel.appendChild(dropZone);
+
+        const msgImport = document.createElement('div');
+        msgImport.id = 'folha-msg-import';
+        msgImport.style.cssText = 'font-size:11px;margin-bottom:10px;min-height:14px;line-height:1.5;';
+        if (arquivoInfo) {
+            msgImport.style.color = '#555';
+            msgImport.innerHTML = `<strong>${escapeHtml(arquivoInfo.nome)}</strong><br>${arquivoInfo.importados} importado(s) · ${arquivoInfo.descartados} sem horas trabalhadas`;
+        }
+        painel.appendChild(msgImport);
+
+        const inputFile = document.createElement('input');
+        inputFile.type = 'file';
+        inputFile.accept = '.xlsx';
+        inputFile.style.display = 'none';
+        painel.appendChild(inputFile);
+
+        const acionarImport = file => {
+            if (!file) return;
+            if (!/\.xlsx$/i.test(file.name)) {
+                msgImport.textContent = 'Selecione um arquivo .xlsx.';
+                msgImport.style.color = '#c0392b';
+                return;
+            }
+            processarArquivoImportado(file, msgImport);
+        };
+
+        dropZone.addEventListener('click', () => inputFile.click());
+        inputFile.addEventListener('change', () => acionarImport(inputFile.files[0]));
+        dropZone.addEventListener('dragover', e => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#27ae60';
+            dropZone.style.background  = '#f6ffed';
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.style.borderColor = '#ccc';
+            dropZone.style.background  = '';
+        });
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropZone.style.borderColor = '#ccc';
+            dropZone.style.background  = '';
+            acionarImport(e.dataTransfer.files[0]);
+        });
 
         // ── Seletor de mês ─────────────────────────────────────────────────
         const labelMes = document.createElement('label');
         labelMes.style.cssText = 'display:block;font-size:12px;color:#555;margin-bottom:4px;';
         labelMes.textContent = 'Mês de referência:';
         painel.appendChild(labelMes);
+
+        const mesAtual = lerMes();
+        const ano      = String(new Date().getFullYear()).slice(-2);
 
         const mesBtns = document.createElement('div');
         mesBtns.id = 'folha-mes-grid';
@@ -375,68 +663,32 @@
         });
         painel.appendChild(mesBtns);
 
-        // ── Textarea ───────────────────────────────────────────────────────
-        const label = document.createElement('label');
-        label.style.cssText = 'display:block;font-size:12px;color:#555;margin-bottom:4px;';
-        label.textContent = 'Cole os protocolos (Nome\tNúmero):';
-        painel.appendChild(label);
-
-        const textarea = document.createElement('textarea');
-        textarea.id = 'folha-textarea';
-        textarea.value = lista.map(e => e.nome ? `${e.nome}\t${e.numero}` : e.numero).join('\n');
-        textarea.placeholder = 'Professor\tProtocolo\tCPF\tCidade\tE-mail\tCelular\tPIS/PASEP/NIT/NIS\tFolha enviada\nAna Paula da Silva\t14.712/2026\t044.678.546-65\t...\n(ou cole diretamente do Excel/Sheets com cabeçalho)';    
-        textarea.rows = 7;
-        textarea.style.cssText = [
-            'display:block', 'width:100%', 'box-sizing:border-box',
-            'margin-bottom:8px', 'padding:6px 8px',
-            'border:1px solid #ccc', 'border-radius:4px',
-            'font-size:12px', 'font-family:monospace', 'resize:vertical',
-            'line-height:1.4',
-        ].join(';');
-        painel.appendChild(textarea);
+        // ── Resumo da lista atual ─────────────────────────────────────────
+        if (lista.length > 0) {
+            const resumoLista = document.createElement('div');
+            resumoLista.style.cssText = 'font-size:11px;color:#555;margin-bottom:8px;';
+            resumoLista.textContent = `${lista.length} professor(es) na lista.`;
+            painel.appendChild(resumoLista);
+        }
 
         // ── Botão Iniciar ──────────────────────────────────────────────────
         const btnIniciar = document.createElement('button');
         btnIniciar.textContent = '▶ Iniciar coleta';
+        btnIniciar.disabled = lista.length === 0;
         btnIniciar.style.cssText = [
             'display:block', 'width:100%',
             'padding:7px 10px',
-            'background:#27ae60', 'color:#fff',
+            'background:' + (lista.length === 0 ? '#a5d6b1' : '#27ae60'), 'color:#fff',
             'border:none', 'border-radius:4px',
-            'cursor:pointer', 'font-size:13px',
+            'cursor:' + (lista.length === 0 ? 'not-allowed' : 'pointer'), 'font-size:13px',
         ].join(';');
         btnIniciar.addEventListener('click', () => {
-            const novaLista = parsearEntrada(textarea.value);
-            const mesSel    = lerMes();
-            if (!mesSel) {
+            if (lerLista().length === 0) return;
+            if (!lerMes()) {
                 mesBtns.style.outline      = '2px solid #c0392b';
                 mesBtns.style.borderRadius = '3px';
                 return;
             }
-            if (novaLista.length === 0) {
-                textarea.style.borderColor = '#c0392b';
-                textarea.focus();
-                return;
-            }
-
-            // Merge: protocolos repetidos recebem os campos extras atualizados;
-            // protocolos novos são adicionados ao final da lista existente.
-            const listaAtual  = lerLista();
-            const listaMerged = listaAtual.map(existente => {
-                const novo = novaLista.find(n => n.numero === existente.numero);
-                if (!novo) return existente;
-                // Preserva nome já salvo se o novo vier vazio; atualiza demais campos
-                return Object.assign({}, existente, novo, {
-                    nome: (existente.nome && existente.nome.trim()) ? existente.nome : novo.nome,
-                });
-            });
-            novaLista.forEach(novo => {
-                if (!listaMerged.find(e => e.numero === novo.numero)) {
-                    listaMerged.push(novo);
-                }
-            });
-
-            salvarLista(listaMerged);
             localStorage.setItem(LS_MODO, 'coleta');
             removerTodosDestaques();
             aplicarDestaques();
@@ -445,10 +697,61 @@
         painel.appendChild(btnIniciar);
     }
 
+    // Lê o arquivo .xlsx selecionado/arrastado, decide se mescla ou substitui a lista e atualiza o resumo
+    async function processarArquivoImportado(file, msgEl) {
+        msgEl.textContent = 'Lendo planilha…';
+        msgEl.style.color = '#555';
+
+        let resultado;
+        try {
+            resultado = await parsearPlanilha(file);
+        } catch (err) {
+            msgEl.textContent = 'Erro ao importar: ' + err.message;
+            msgEl.style.color = '#c0392b';
+            return;
+        }
+
+        if (resultado.registros.length === 0) {
+            msgEl.textContent = 'Nenhum professor com horas trabalhadas > 0 encontrado nesta planilha.';
+            msgEl.style.color = '#c0392b';
+            return;
+        }
+
+        const mesAtual  = lerMes();
+        const mesNovo   = resultado.mes;
+        const temColeta = lerColetados().length > 0;
+
+        const aplicar = zerarProgresso => {
+            salvarLista(resultado.registros);
+            if (zerarProgresso) {
+                localStorage.setItem(LS_COLETADOS, '[]');
+                salvarPulados([]);
+            }
+            if (mesNovo) localStorage.setItem(LS_MES, mesNovo);
+            localStorage.setItem(LS_ARQUIVO, JSON.stringify({
+                nome: file.name, ts: Date.now(),
+                total: resultado.total, importados: resultado.registros.length, descartados: resultado.descartados,
+            }));
+            atualizarPainel();
+        };
+
+        if (mesNovo && mesAtual && mesNovo !== mesAtual && temColeta) {
+            const zerar = confirm(
+                `Nova competência (${mesNovo}), diferente da atual (${mesAtual}).\n\n` +
+                `Zerar o progresso (${lerColetados().length} coletado(s)) e substituir a lista?\n\n` +
+                `OK = zerar progresso · Cancelar = manter progresso e mesclar`
+            );
+            aplicar(zerar);
+        } else {
+            aplicar(false);
+        }
+    }
+
     // ── Modo Coleta ────────────────────────────────────────────────────────
     function renderizarModoColeta(painel) {
         const lista      = lerLista();
         const coletados  = lerColetados();
+        const pulados    = lerPulados();
         const visiveis   = contarVisiveis();
         const total      = lista.length;
         const nColetados = coletados.length;
@@ -467,8 +770,30 @@
             `Na lista: <strong>${total}</strong><br>` +
             `Pend. visíveis: <strong style="color:#27ae60;">${visiveis}</strong><br>` +
             `Já coletados: <strong style="color:#2980b9;">${nColetados}</strong><br>` +
+            (pulados.length > 0 ? `Pulados: <strong style="color:#e67e22;">${pulados.length}</strong><br>` : '') +
             `Faltam: <strong style="color:${faltam > 0 ? '#c0392b' : '#27ae60'};">${faltam}</strong>`;
         painel.appendChild(stats);
+
+        // Botão Abrir próximo pendente — fila de trabalho baseada nos links importados da planilha
+        const proximo = proximoPendente();
+        const btnProximo = document.createElement('button');
+        btnProximo.disabled = !proximo;
+        if (proximo) {
+            const posicao = lista.findIndex(e => e.numero === proximo.numero) + 1;
+            btnProximo.innerHTML = `▶ Abrir próximo pendente<br><span style="font-weight:400;font-size:11px;opacity:.9;">${escapeHtml(proximo.nome || proximo.numero)} (${posicao}/${total})</span>`;
+        } else {
+            btnProximo.textContent = '✓ Nenhum pendente';
+        }
+        btnProximo.style.cssText = [
+            'display:block', 'width:100%', 'margin-bottom:6px',
+            'padding:7px 10px',
+            'background:' + (proximo ? '#27ae60' : '#ccc'), 'color:#fff',
+            'border:none', 'border-radius:4px',
+            'cursor:' + (proximo ? 'pointer' : 'default'), 'font-size:12px', 'font-weight:700',
+            'line-height:1.5', 'text-align:center',
+        ].join(';');
+        if (proximo) btnProximo.addEventListener('click', () => abrirProtocolo(proximo));
+        painel.appendChild(btnProximo);
 
         // Botão Ver lista
         const btnVer = document.createElement('button');
@@ -483,21 +808,21 @@
         btnVer.addEventListener('click', mostrarModalLista);
         painel.appendChild(btnVer);
 
-        const btnEditar = document.createElement('button');
-        btnEditar.textContent = '✏️ Editar lista';
-        btnEditar.style.cssText = [
+        const btnReimportar = document.createElement('button');
+        btnReimportar.textContent = '📂 Reimportar planilha';
+        btnReimportar.style.cssText = [
             'display:block', 'width:100%', 'margin-bottom:6px',
             'padding:6px 10px',
             'background:#f5f5f5', 'color:#333',
             'border:1px solid #ccc', 'border-radius:4px',
             'cursor:pointer', 'font-size:12px',
         ].join(';');
-        btnEditar.addEventListener('click', () => {
+        btnReimportar.addEventListener('click', () => {
             localStorage.setItem(LS_MODO, 'entrada');
             removerTodosDestaques();
             atualizarPainel();
         });
-        painel.appendChild(btnEditar);
+        painel.appendChild(btnReimportar);
 
         const btnLimpar = document.createElement('button');
         btnLimpar.textContent = 'Limpar tudo';
@@ -511,7 +836,9 @@
             if (!confirm('Limpar lista e dados de coleta?')) return;
             salvarLista([]);
             localStorage.setItem(LS_COLETADOS, '[]');
+            salvarPulados([]);
             localStorage.removeItem(LS_MES);
+            localStorage.removeItem(LS_ARQUIVO);
             localStorage.setItem(LS_MODO, 'entrada');
             removerTodosDestaques();
             atualizarPainel();
@@ -543,7 +870,7 @@
             'cursor:pointer', 'font-size:11px',
         ].join(';');
         btnExp.addEventListener('click', () => {
-            const keys = [LS_LISTA, LS_COLETADOS, LS_MODO, LS_MES, LS_INBOX_URL];
+            const keys = [LS_LISTA, LS_COLETADOS, LS_PULADOS, LS_MODO, LS_MES, LS_INBOX_URL, LS_ARQUIVO];
             const data = {};
             keys.forEach(k => { const v = localStorage.getItem(k); if (v !== null) data[k] = v; });
             const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -601,6 +928,7 @@
         const lista     = lerLista();
         const coletados = lerColetados();
         const colNums   = coletadosNumeros();
+        const pulados   = lerPulados();
 
         const overlay = document.createElement('div');
         overlay.id = 'folha-modal-lista';
@@ -639,6 +967,7 @@
         resumo.style.cssText = 'padding:7px 16px;background:#f9f9f9;border-bottom:1px solid #eee;font-size:12px;color:#555;flex-shrink:0;';
         resumo.innerHTML =
             `Coletados: <strong style="color:#2980b9;">${coletados.length}</strong> &nbsp;|&nbsp;` +
+            (pulados.length > 0 ? `Pulados: <strong style="color:#e67e22;">${pulados.length}</strong> &nbsp;|&nbsp;` : '') +
             `Pendentes: <strong style="color:#c0392b;">${lista.length - coletados.length}</strong>`;
         box.appendChild(resumo);
 
@@ -652,13 +981,18 @@
             vazio.textContent = 'Nenhum protocolo na lista.';
             corpo.appendChild(vazio);
         } else {
-            lista.forEach(({ nome, numero, celular }) => {
+            lista.forEach(entry => {
+                const { nome, numero, celular, horas } = entry;
                 const coletado = colNums.includes(numero);
+                const pulado   = !coletado && pulados.includes(numero);
+                const linkUrl  = entry.url || urlColetado(numero); // entry.url = link importado; fallback = url gravada na coleta (entradas antigas)
+
                 const item = document.createElement('div');
                 item.style.cssText = [
                     'display:flex', 'justify-content:space-between', 'align-items:center',
                     'padding:5px 16px', 'border-bottom:1px solid #f0f0f0',
                     coletado ? 'background:#f6ffed' : '',
+                    linkUrl ? 'cursor:pointer' : '',
                 ].join(';');
 
                 const info = document.createElement('div');
@@ -668,30 +1002,20 @@
                 nomeEl.textContent = nome || '—';
                 const numEl = document.createElement('div');
                 numEl.style.cssText = 'font-size:11px;color:#888;font-family:monospace;';
-                numEl.textContent = numero;
+                numEl.textContent = numero + (horas ? ` · ${horas}h` : '');
                 info.appendChild(nomeEl);
                 info.appendChild(numEl);
 
                 const badgeCss = [
                     'font-size:11px', 'padding:2px 7px', 'border-radius:10px',
                     'white-space:nowrap', 'margin-left:8px', 'flex-shrink:0',
-                    'background:'       + (coletado ? '#dff0d8' : '#fcf8e3'),
-                    'color:'            + (coletado ? '#3c763d' : '#8a6d3b'),
-                    'border:1px solid ' + (coletado ? '#d6e9c6' : '#faebcc'),
+                    'background:'       + (coletado ? '#dff0d8' : pulado ? '#fdebd0' : '#fcf8e3'),
+                    'color:'            + (coletado ? '#3c763d' : pulado ? '#af601a' : '#8a6d3b'),
+                    'border:1px solid ' + (coletado ? '#d6e9c6' : pulado ? '#fad7a0' : '#faebcc'),
                 ].join(';');
-                const url = coletado ? urlColetado(numero) : '';
-                let badge;
-                if (url) {
-                    badge = document.createElement('a');
-                    badge.href = url;
-                    badge.target = '_blank';
-                    badge.rel = 'noopener';
-                    badge.style.cssText = badgeCss + ';text-decoration:none;cursor:pointer;';
-                } else {
-                    badge = document.createElement('span');
-                    badge.style.cssText = badgeCss;
-                }
-                badge.textContent = coletado ? '✓ Coletado' : '⏳ Pendente';
+                const badge = document.createElement('span');
+                badge.style.cssText = badgeCss;
+                badge.textContent = coletado ? '✓ Coletado' : pulado ? '⤼ Pulado' : '⏳ Pendente';
 
                 // Lado direito: badge + botão WhatsApp
                 const direita = document.createElement('div');
@@ -725,6 +1049,15 @@
 
                 item.appendChild(info);
                 item.appendChild(direita);
+
+                if (linkUrl) {
+                    item.addEventListener('click', e => {
+                        if (e.target.closest('a')) return; // não interceptar o botão WhatsApp
+                        overlay.remove();
+                        location.href = linkUrl;
+                    });
+                }
+
                 corpo.appendChild(item);
             });
         }
@@ -751,33 +1084,123 @@
             const numero = numEl.innerText.trim();
             if (!listaNumeros().includes(numero)) return; // protocolo não está na lista
 
-            // Rolar para o fim da página
-            window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            criarPainelProtocolo(numero);
+
+            const jaColetado = coletadosNumeros().includes(numero);
+            if (!jaColetado) {
+                // Rolar para o fim da página
+                window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+            }
 
             // Nome vem da lista salva (mais confiável que extração do DOM)
             const mesRef = lerMes();
             const nome   = nomeDoNumero(numero) || extrairNomeRemetente();
 
-            // Interceptar cliques em links de anexo — dialog só aparece após o clique
+            // Interceptar cliques em links de anexo — sempre abre em janela na metade direita;
+            // se já coletado, não copia clipboard nem reabre o dialog "foi salva?" (decisão do usuário)
             function interceptarAnexo(e) {
                 const link = e.target.closest('a[href*="pg=doc/anexo"]');
                 if (!link) return;
                 e.preventDefault();
                 e.stopPropagation();
 
-                // Escrever no clipboard dentro do gesto (clique)
-                const texto = [mesRef, nome].filter(Boolean).join(' ');
-                if (texto) navigator.clipboard.writeText(texto).catch(() => {});
+                if (!jaColetado) {
+                    // Escrever no clipboard dentro do gesto (clique)
+                    const texto = [mesRef, nome].filter(Boolean).join(' ');
+                    if (texto) navigator.clipboard.writeText(texto).catch(() => {});
+                }
 
                 const w    = Math.floor(screen.availWidth  / 2);
                 const h    = screen.availHeight;
                 const left = Math.floor(screen.availWidth  / 2);
                 window.open(link.href, 'folha-anexo', `width=${w},height=${h},left=${left},top=0`);
-                mostrarDialogColeta(numero, interceptarAnexo);
+
+                if (!jaColetado) mostrarDialogColeta(numero, interceptarAnexo);
             }
 
             document.addEventListener('click', interceptarAnexo, true);
         }, 400);
+    }
+
+    // Mini-painel fixo na página do protocolo: nome/posição na fila + navegação (Ver lista, Pular, Próximo, Inbox)
+    function criarPainelProtocolo(numero) {
+        if (document.getElementById('folha-painel-protocolo')) return;
+
+        const lista    = lerLista();
+        const idx      = lista.findIndex(e => e.numero === numero);
+        const nome     = nomeDoNumero(numero) || extrairNomeRemetente();
+        const coletado = coletadosNumeros().includes(numero);
+
+        const painel = document.createElement('div');
+        painel.id = 'folha-painel-protocolo';
+        painel.style.cssText = [
+            'position:fixed', 'top:60px', 'right:20px',
+            'background:#fff', 'border:1px solid #ccc', 'border-radius:6px',
+            'padding:10px 14px', 'z-index:99999',
+            'box-shadow:0 2px 10px rgba(0,0,0,.2)',
+            'font-size:12px', 'width:220px',
+            'font-family:sans-serif', 'line-height:1.5',
+        ].join(';');
+
+        const titulo = document.createElement('div');
+        titulo.style.cssText = 'font-weight:700;font-size:13px;color:#333;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;';
+        titulo.textContent = '📋 ' + (nome || numero);
+        painel.appendChild(titulo);
+
+        const posicao = document.createElement('div');
+        posicao.style.cssText = 'color:#888;margin-bottom:8px;';
+        posicao.textContent = (idx >= 0 ? `${idx + 1}/${lista.length}` : '') + (coletado ? ' · ✓ já coletado' : '');
+        painel.appendChild(posicao);
+
+        const btnCssSecundario = [
+            'flex:1', 'padding:5px 0',
+            'background:#f5f5f5', 'color:#333',
+            'border:1px solid #ccc', 'border-radius:4px',
+            'cursor:pointer', 'font-size:11px',
+        ].join(';');
+
+        const linha1 = document.createElement('div');
+        linha1.style.cssText = 'display:flex;gap:5px;margin-bottom:5px;';
+        const btnVer = document.createElement('button');
+        btnVer.textContent = '👁 Ver lista';
+        btnVer.style.cssText = btnCssSecundario;
+        btnVer.addEventListener('click', mostrarModalLista);
+        const btnInbox = document.createElement('button');
+        btnInbox.textContent = '↩ Inbox';
+        btnInbox.style.cssText = btnCssSecundario;
+        btnInbox.addEventListener('click', navegarInbox);
+        linha1.appendChild(btnVer);
+        linha1.appendChild(btnInbox);
+        painel.appendChild(linha1);
+
+        const linha2 = document.createElement('div');
+        linha2.style.cssText = 'display:flex;gap:5px;';
+        const btnPular = document.createElement('button');
+        btnPular.textContent = '⤼ Pular';
+        btnPular.style.cssText = btnCssSecundario;
+        btnPular.addEventListener('click', () => {
+            const pulados = lerPulados();
+            if (!pulados.includes(numero)) { pulados.push(numero); salvarPulados(pulados); }
+            const proximo = proximoPendente();
+            if (proximo) abrirProtocolo(proximo); else navegarInbox();
+        });
+        const btnProximo = document.createElement('button');
+        btnProximo.textContent = '▶ Próximo';
+        btnProximo.style.cssText = [
+            'flex:1', 'padding:5px 0',
+            'background:#27ae60', 'color:#fff',
+            'border:none', 'border-radius:4px',
+            'cursor:pointer', 'font-size:11px', 'font-weight:600',
+        ].join(';');
+        btnProximo.addEventListener('click', () => {
+            const proximo = proximoPendente();
+            if (proximo) abrirProtocolo(proximo); else navegarInbox();
+        });
+        linha2.appendChild(btnPular);
+        linha2.appendChild(btnProximo);
+        painel.appendChild(linha2);
+
+        document.body.appendChild(painel);
     }
 
     function extrairNomeRemetente() {
@@ -875,11 +1298,30 @@ function mostrarDialogColeta(numero, handlerAnexo) {
         }
     }
 
+    // Grava LS_AVANCO no clique em "Enviar" (feito manualmente pelo usuário) — consumido por
+    // verificarAvancoPendente() na página seguinte, seja ela o protocolo ou o inbox
+    function armarListenerEnvio(numeroAlvo) {
+        let tentativas = 0;
+        const ivBtn = setInterval(() => {
+            tentativas++;
+            const btn = document.getElementById('enviar_documento');
+            if (btn) {
+                clearInterval(ivBtn);
+                btn.addEventListener('click', () => {
+                    localStorage.setItem(LS_AVANCO, JSON.stringify({ numero: numeroAlvo, ts: Date.now() }));
+                }, { capture: true, once: true });
+            } else if (tentativas > 60) { // ~12s a 200ms
+                clearInterval(ivBtn);
+            }
+        }, 200);
+    }
+
     function responderProtocolo(numero) {
         // 1. Clicar no botão flutuante "Responder" (bf_v_1)
         const btnResp = document.querySelector('button.bf_v_1');
         if (!btnResp) { navegarInbox(); return; }
         btnResp.click();
+        armarListenerEnvio(numero);
 
         const nome = nomeDoNumero(numero);
         const MAX  = 12000;
@@ -959,6 +1401,93 @@ function mostrarDialogColeta(numero, handlerAnexo) {
                 }, 200);
             }, 200);
         }, 300);
+    }
+
+    // ════════════════════════════════════════════════════════════════════════
+    // AVANÇO NA FILA (após clicar em Enviar)
+    // ════════════════════════════════════════════════════════════════════════
+
+    // Roda no dispatch de qualquer página — cobre os dois destinos possíveis após o envio da resposta
+    function verificarAvancoPendente() {
+        let avanco;
+        try { avanco = JSON.parse(localStorage.getItem(LS_AVANCO) || 'null'); } catch { avanco = null; }
+        if (!avanco) return;
+        localStorage.removeItem(LS_AVANCO);
+        if (Date.now() - avanco.ts > 5 * 60 * 1000) return; // expirado (>5 min) — evita disparo tardio
+
+        mostrarDialogProximo(proximoPendente());
+    }
+
+    function mostrarDialogProximo(proximo) {
+        if (document.getElementById('folha-dialog-proximo')) return;
+
+        const overlay = document.createElement('div');
+        overlay.id = 'folha-dialog-proximo';
+        overlay.style.cssText = [
+            'position:fixed', 'inset:0',
+            'background:rgba(0,0,0,.35)', 'z-index:100000',
+            'display:flex', 'align-items:center', 'justify-content:center',
+        ].join(';');
+
+        const box = document.createElement('div');
+        box.style.cssText = [
+            'background:#fff', 'border-radius:8px',
+            'padding:22px 26px', 'max-width:360px', 'width:90%',
+            'box-shadow:0 4px 24px rgba(0,0,0,.3)',
+            'font-family:sans-serif', 'font-size:13px', 'text-align:center',
+        ].join(';');
+
+        const titulo = document.createElement('div');
+        titulo.style.cssText = 'font-size:15px;font-weight:700;color:#333;margin-bottom:8px;';
+        titulo.textContent = '✓ Resposta enviada';
+        box.appendChild(titulo);
+
+        const lista    = lerLista();
+        const posicao  = proximo ? lista.findIndex(e => e.numero === proximo.numero) + 1 : 0;
+
+        const sub = document.createElement('div');
+        sub.style.cssText = 'color:#555;margin-bottom:20px;line-height:1.5;';
+        sub.innerHTML = proximo
+            ? `Próximo: <strong>${escapeHtml(proximo.nome || proximo.numero)}</strong> (${posicao}/${lista.length})`
+            : 'Não há mais pendentes na lista.';
+        box.appendChild(sub);
+
+        const btns = document.createElement('div');
+        btns.style.cssText = 'display:flex;gap:10px;justify-content:center;';
+
+        const btnAbrir = document.createElement('button');
+        btnAbrir.textContent = proximo ? '▶ Abrir' : '✓ OK';
+        btnAbrir.style.cssText = [
+            'padding:8px 22px', 'background:#27ae60', 'color:#fff',
+            'border:none', 'border-radius:4px', 'cursor:pointer',
+            'font-size:13px', 'font-weight:700',
+        ].join(';');
+        btnAbrir.addEventListener('click', () => {
+            overlay.remove();
+            if (proximo) abrirProtocolo(proximo); else navegarInbox();
+        });
+        btns.appendChild(btnAbrir);
+
+        if (proximo) {
+            const btnInbox = document.createElement('button');
+            btnInbox.textContent = '↩ Voltar ao inbox';
+            btnInbox.style.cssText = [
+                'padding:8px 18px', 'background:#f5f5f5', 'color:#555',
+                'border:1px solid #ccc', 'border-radius:4px',
+                'cursor:pointer', 'font-size:13px',
+            ].join(';');
+            btnInbox.addEventListener('click', () => { overlay.remove(); navegarInbox(); });
+            btns.appendChild(btnInbox);
+        }
+
+        box.appendChild(btns);
+        overlay.appendChild(box);
+        document.body.appendChild(overlay);
+
+        setTimeout(() => btnAbrir.focus(), 50);
+        overlay.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); btnAbrir.click(); }
+        });
     }
 
 })();

@@ -3,7 +3,15 @@
     "allow": [
       "Bash(node --check 1doc/credenciamento/credenciamento.user.js)",
       "Bash(rm -f /tmp/test_mask.js && echo \"cleaned\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(python -)",
+      "Bash(python -c ' *)",
+      "Read(//tmp/**)",
+      "Bash(node --check folha.user.js)",
+      "Bash(node -e \"console.log\\(typeof DecompressionStream\\)\")",
+      "Bash(node verify_lerzip.mjs \"c:/dev/scripts/1doc/credenciamento/ref/horas-trabalhadas_2026-07-01_a_2026-07-31.xlsx\")",
+      "Bash(python verify_parsearplanilha.py \"c:/dev/scripts/1doc/credenciamento/ref/horas-trabalhadas_2026-07-01_a_2026-07-31.xlsx\")",
+      "Bash(echo \"exit:$?\")"
     ],
     "additionalDirectories": [
       "\\tmp"

@@ -65,6 +65,15 @@ Antes de qualquer implementação:
    - **Não abrir** `1Doc - processo.mhtml` diretamente — o arquivo tem ~20 MB e satura o contexto.
    - Usar `grep_search` com o termo próximo ao ponto de injeção (ex: `btn-group-tags`, `modal_aprovacao_anexos`) para extrair apenas o trecho relevante do HTML.
 
+## Ambiente de Desenvolvimento (Windows)
+
+Runtimes disponíveis no shell (Bash/Git Bash) para scripts de verificação fora do navegador:
+
+* **`python`** — Python 3.12.10. **`python3` não existe** neste ambiente: o alias do Windows intercepta o comando e tenta abrir a Microsoft Store, retornando erro em vez de rodar o interpretador. Sempre invocar `python`, nunca `python3`.
+* **`node`** — v24.14.1. Já inclui `DecompressionStream` nativo (útil para inflar `deflate-raw` de arquivos `.xlsx`/`.zip` sem dependências externas).
+
+Útil para validar lógica de parsing (ex.: ler `.xlsx` via `zipfile`/`xml.etree` em Python) antes de portar para o userscript, sem precisar abrir o navegador.
+
 ## Checklist de final de tarefa
 
 Antes de encerrar:
