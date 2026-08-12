@@ -20,7 +20,7 @@
 | `funcoesSelecionadas` | `string[]` | por candidato | Funções pretendidas selecionadas (`'Ed. Básica'`, `'Ed. Física'`, `'Artes'`) |
 | `regioesSelecionadas` | `number[]` | por candidato | Regiões escolares selecionadas (1–5) |
 | `cpfDigitos` | `string` | por candidato | Apenas dígitos do CPF (11 chars) |
-| `rgDigitos` | `string` | por candidato | Apenas dígitos do RG |
+| `rgValor` | `string` | por candidato | RG: dígitos, podendo terminar em `X` (dígito verificador). Aceita 11 dígitos quando iguais ao CPF |
 | `nacionalidade` | `string` | por candidato | Default: `'brasileira'` |
 | `dataNascimento` | `string` | por candidato | Data de nascimento no formato `'DD/MM/AAAA'`; vazio se não preenchido |
 | `estadoCivil` | `string` | por candidato | Estado civil selecionado |
@@ -56,7 +56,9 @@
 | `aguardarModalEInjetar` | Polling (100ms, até 10s) aguarda `#modal_aprovacao_anexos` visível e com tabela carregada; chama `injetarControlesNoModal` |
 | `criarFormulario` | Retorna `<div id="cred-form-container">` com todos os campos, pré-agrupados por documento-fonte: `#cred-identidade-campos` (CPF/RG/Nacionalidade/Nascimento, anexo II) e `#cred-ficha-campos` (Estado civil, Endereço, E-mail/Celular, Conta Santander, Função, Regiões — anexo I). Os movers realocam esses grupos para dentro das subseções dos anexos |
 | `formatarCelular` | Formata string de dígitos em `(00) 00000-0000` (11 dígitos) ou `(00) 0000-0000` (10 dígitos); progressivo durante digitação |
-| `registrarEventListenersFormulario` | Registra máscaras progressivas e handlers dos campos: CPF, RG, Nacionalidade, Estado civil, Celular, E-mail, Função (toggle múltiplo), Regiões (toggle múltiplo). Auto-save delegado registrado em `#cred-form-container` **e** `#cred-ficha-campos` (os campos gerais foram movidos para fora do form-container) |
+| `sanitizarRG` | Normaliza o valor digitado no RG: mantém dígitos e um `X` final (maiúsculo), descarta `X` em outras posições; limita a 8 dígitos + `X`, ou 11 caracteres sem `X` (CPF no lugar do RG) |
+| `formatarRG` | Máscara progressiva do RG: `00.000.000-0` / `00.000.000-X`; usa formato de CPF (`000.000.000-00`) quando há mais de 9 dígitos e nenhum `X`. Usada pelo listener de digitação e por `restaurarProgresso` |
+| `registrarEventListenersFormulario` | Registra máscaras progressivas e handlers dos campos: CPF, RG (via `sanitizarRG`/`formatarRG`), Nacionalidade, Estado civil, Celular, E-mail, Função (toggle múltiplo), Regiões (toggle múltiplo). Auto-save delegado registrado em `#cred-form-container` **e** `#cred-ficha-campos` (os campos gerais foram movidos para fora do form-container) |
 | `injetarControlesNoModal` | **Orquestrador principal**: injeta header, info-block, formulário, ficha, outros-anexos, botões Sim/Não e footer; guard via atributo `data-cred-injetado`; chama `resetarEstadoCandidato` e `executarFluxo` |
 | `moverFichaInscricao` | Remove linha "I - Ficha de Inscrição" da tabela nativa e a reposiciona como `<div id="cred-ficha-inscricao">` acima do formulário; chama `adicionarColunaStatusNaTabela` para categoria `'I'`; **move a linha de campos `#cred-ficha-campos` (Estado civil, Endereço, E-mail/Celular, Conta Santander, Função, Regiões) para dentro dessa subseção**, logo abaixo do anexo/aviso — mesmo padrão de II e VI |
 | `moverDocIdentidade` | Remove linha "II – Cópia de documento de Identidade..." da tabela nativa e a injeta como `<div id="cred-doc-identidade">` logo após o cabeçalho "Dados Pessoais" no `formContainer`; **move a linha de campos `#cred-identidade-campos` (CPF/RG/Nacionalidade/Data de Nascimento) para dentro dessa subseção**, logo abaixo do anexo — mesmo padrão de `moverDocPIS` (VI + número do PIS); chama `adicionarColunaStatusNaTabela` para categoria `'II'`; pula categoria II em `injetarBotoesCategorias` |
@@ -98,8 +100,8 @@
 | `validarFormulario` | Valida sequencialmente (fail-fast): nome confirmado (checkbox), CPF 11 dígitos + dígito verificador válido (`cpfValido`; exceção: `00000000000` aceito como CPF anulado), RG, data de nascimento preenchida/válida (≥18 anos), estado civil, endereço (CEP/logradouro/número/bairro/cidade), celular, e-mail, agência (opcional; vazia ou 4 dígitos), conta (opcional; vazia ou 9 dígitos), PIS, ≥1 função, ≥1 região, todos os Sim/Não respondidos |
 | `copiarEFechar` | **Fase 1:** valida, aplica marcadores credenciadora/ciclo/habilitado, seta `concluido=true`, salva progresso e chama `executarFase1Conclusao`. **Modo concluído:** apenas copia e abre planilha. |
 | `aguardarElemento` | Polling (100ms) que aguarda um elemento no DOM por seletor CSS + filtro opcional; resolve com o elemento ou `null` após timeout. |
-| `executarFase1Conclusao` | Orquestra o fluxo pós-modal: fecha dialog → clica "Responder" nativo → insere modelo TinyMCE → seleciona destinatário Select2 → seta `aguardandoEnvioResposta=true` → exibe dialog de aviso. |
-| `mostrarDialogVerificarMensagens` | Exibe overlay com aviso para o usuário conferir se há novas mensagens no protocolo antes de enviar a resposta padrão. |
+| `executarFase1Conclusao` | Orquestra o fluxo pós-modal: fecha dialog → clica "Responder" nativo → seta `aguardandoEnvioResposta=true` → exibe dialog de aviso. **Não** seleciona modelo de mensagem nem destinatário (removido em 0.6.3 — a ordem dos modelos no TinyMCE muda e a escolha errada ia para o protocolo). |
+| `mostrarDialogVerificarMensagens` | Exibe overlay pedindo ao usuário que selecione o destinatário, insira o modelo de mensagem e confira se há novas mensagens no protocolo antes de enviar a resposta. |
 | `removerMarcadoresCredenciamento` | Remove do select2 todos os marcadores das credenciadoras (`EQUIPE`) e de status (Habilitado, Inabilitado, Conferido). Chamado pelo botão "Descartar" do toast. |
 | `aplicarMarcadorResultado` | Adiciona marcador pelo nome exato. Habilitado ↔ Inabilitado se remove mutuamente. Conferido é só acrescido. |
 | `ativarModoCongelado` | Seta `concluido=true`, desabilita inputs/botões do formulário, troca botão para "Copiar" e injeta `#cred-btn-editar` amarelo |
@@ -140,7 +142,7 @@
 | `cred-btn-executar` | `injetarControlesNoModal` | Botão "Copiar"/"Processando..." no footer do modal |
 | `cred-chip-habilitacao` | `injetarControlesNoModal` | Chip de status (Em avaliação / Habilitado / Inabilitado) |
 | `cred-cpf` | `criarFormulario` | Input CPF (máscara `000.000.000-00`) |
-| `cred-rg` | `criarFormulario` | Input RG (máscara `00.000.000-0`) |
+| `cred-rg` | `criarFormulario` | Input RG (máscara `00.000.000-0`, verificador podendo ser `X`; sem `inputmode="numeric"`) |
 | `cred-agencia` | `criarFormulario` | Input Agência Santander (4 dígitos; texto, preserva zeros à esquerda) |
 | `cred-conta` | `criarFormulario` | Input Conta Santander (máscara `XXXXXXXX-X`; texto, preserva zeros à esquerda) |
 | `cred-doc-pis` | `moverDocPIS` | Seção destacada com o anexo VI (PIS/PASEP), botões Sim/Não e o campo `#cred-pis` |
@@ -219,7 +221,7 @@ observerUI (MutationObserver)
 | E | Protocolo 1Doc (hyperlink no HTML, texto puro no plain) |
 | F | Motivo da inabilitação (reservado — sempre vazio) |
 | G | CPF (apenas dígitos) |
-| H | RG (apenas dígitos) |
+| H | RG (dígitos, podendo terminar em `X`) |
 | I | Nacionalidade |
 | J | Data de Nascimento (`DD/MM/AAAA`) |
 | K | Estado Civil |

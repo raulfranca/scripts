@@ -11,7 +11,25 @@
       "Bash(node -e \"console.log\\(typeof DecompressionStream\\)\")",
       "Bash(node verify_lerzip.mjs \"c:/dev/scripts/1doc/credenciamento/ref/horas-trabalhadas_2026-07-01_a_2026-07-31.xlsx\")",
       "Bash(python verify_parsearplanilha.py \"c:/dev/scripts/1doc/credenciamento/ref/horas-trabalhadas_2026-07-01_a_2026-07-31.xlsx\")",
-      "Bash(echo \"exit:$?\")"
+      "Bash(echo \"exit:$?\")",
+      "Bash(git rev-list *)",
+      "Bash(echo \"exit code: $? \\(1 = nao encontrado\\)\")",
+      "Bash(git show-ref *)",
+      "Bash(git ls-remote *)",
+      "Bash(gh repo *)",
+      "Bash(curl -s -o /dev/null -w \"HTTP %{http_code}\\\\n\" https://api.github.com/repos/raulfranca/scripts)",
+      "Bash(git ls-tree *)",
+      "Bash(echo \"exit $? \\(1 = nao contem\\)\")",
+      "Bash(echo \"exit $? \\(1 = ja saiu do indice\\)\")",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git reflog *)",
+      "Bash(git gc *)",
+      "Bash(echo \"exit $? \\(1/128 = removido\\)\")",
+      "Bash(echo \"exit $? \\(1 = nao encontrado\\)\")",
+      "Bash(curl -s -o /dev/null -w \"commit 350c793: HTTP %{http_code}\\\\n\" \"https://github.com/raulfranca/scripts/commit/350c7937ad91dd6814c6fd7bd4c211d75c2b6560\")",
+      "Bash(curl -s -o /dev/null -w \"arquivo .xlsx no raw: HTTP %{http_code}\\\\n\" \"https://raw.githubusercontent.com/raulfranca/scripts/350c7937ad91dd6814c6fd7bd4c211d75c2b6560/1doc/credenciamento/ref/horas-trabalhadas_2026-07-01_a_2026-07-31.xlsx\")",
+      "Bash(curl -s -I \"https://raw.githubusercontent.com/raulfranca/scripts/350c7937ad91dd6814c6fd7bd4c211d75c2b6560/1doc/credenciamento/ref/horas-trabalhadas_2026-07-01_a_2026-07-31.xlsx\")"
     ],
     "additionalDirectories": [
       "\\tmp"

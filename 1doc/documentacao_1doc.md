@@ -32,6 +32,19 @@ Todos os scripts devem obrigatoriamente conter o cabeçalho abaixo. É fundament
 
 3. **Publicação:** Fazer o merge da branch `dev` para a `main` e realizar o push para o GitHub (https://github.com/raulfranca/scripts/1doc). Os colegas receberão a atualização automaticamente via TamperMonkey com base na `@updateURL`.
 
+### 3.1. Cada script é um produto independente (monorepo)
+
+Uma pasta pode conter vários `*.user.js` (é o caso de `1doc/credenciamento/`, com cinco). **A pasta não é a unidade de versionamento — o script é.** Cada `.user.js` tem sua própria `@updateURL` e é instalado/atualizado isoladamente no TamperMonkey de cada colega; quem usa o `credenciamento.user.js` não recebe nem enxerga mudanças do `folha.user.js`.
+
+Daí a convenção vigente (definida pelo usuário em 2026-08-12):
+
+* **Um changelog por script:** `<nome-do-script>_changelog.md`, ao lado do script — mesmo padrão de `<nome-do-script>_prd.md`.
+* **Uma linha SemVer por script:** o número no changelog é o `@version` daquele script. Mudança em um script **não** bumpa os outros.
+* **`@version`, "Versão atual" no PRD e cabeçalho do changelog devem sempre concordar.** Quando divergirem, o `@version` publicado em `main` é a referência.
+* Uma tarefa que toca dois scripts gera **duas** entradas, uma em cada changelog.
+
+> **Armadilha que motivou a regra:** com um changelog único da pasta, o número da seção virava um "release da pasta" que não correspondia ao `@version` de nenhum script. Na prática as seções `[0.6.2]` e `[0.7.0]` foram publicadas sem bumpar os cabeçalhos dos scripts que elas descreviam, e ficou impossível dizer qual versão de cada script continha o quê.
+
 Aqui está o conteúdo bruto em um bloco de código Markdown padrão. Você pode usar o botão "Copiar" (Copy) no canto superior direito deste bloco para transferir todo o texto com as marcações perfeitamente preservadas.
 
 
@@ -462,6 +475,12 @@ const ivEditor = setInterval(() => {
 
 > `window.tinymce` pode existir mas `tinymce.activeEditor` ser `null` enquanto o editor carrega. O duplo guard (`activeEditor` + `getBody()`) é necessário.
 
+> **⚠️ Não automatizar a escolha de "Inserir modelos" do TinyMCE.** O dropdown de modelos do 1Doc é conteúdo editorial: modelos são criados, renomeados e reordenados pelos administradores sem aviso. Dois motivos tornam a automação frágil:
+> * **O botão só tem ID posicional.** `#mceu_11-open` é gerado pelo TinyMCE a partir da **ordem** dos itens na toolbar — inserir qualquer botão antes dele desloca a numeração e o seletor passa a apontar para outro controle.
+> * **Selecionar por texto não protege contra o pior caso.** Mesmo casando `.mce-text` com um código como `[CRED-CHP014]`, se o modelo for renomeado o `if` cai no `else` silencioso e a resposta é enviada **sem** a mensagem — ou, pior, com a mensagem errada se dois modelos compartilharem prefixo.
+>
+> O custo do erro é alto (a mensagem errada vai para o protocolo do cidadão) e o ganho é um clique. O padrão adotado é **preparar o terreno e parar**: o script abre o formulário de resposta e exibe um dialog pedindo que o usuário escolha o modelo e o destinatário. Vale para qualquer lista cujo conteúdo seja mantido fora do script (modelos, marcadores editoriais, setores).
+
 ### 5.9 Override de Estilos Inline com `!important`
 
 O 1Doc define `background-color` e outros estilos diretamente via `element.style` (inline), que tem precedência maior que qualquer CSS de stylesheet. Para sobrepor isso em linhas do inbox ou outros elementos:
@@ -616,6 +635,35 @@ function selecionarBotao(clicado, outro, valor) {
 btnSim.addEventListener('click', () => selecionarBotao(btnSim, btnNao, true));
 btnNao.addEventListener('click', () => selecionarBotao(btnNao, btnSim, false));
 ```
+
+#### Máscaras de documentos: nem todo campo "numérico" é só dígito
+
+Antes de escrever `replace(/\D/g, '')` em um campo de documento, verifique se o formato admite letras. O caso concreto que quebrou o formulário de credenciamento: **o RG usa `X` como dígito verificador** em vários estados (SP entre eles) — a máscara digit-only descartava o caractere e o candidato não conseguia informar o próprio documento.
+
+O padrão adotado é separar **normalização** de **formatação**, em duas funções puras reusadas pelo listener de digitação e pela restauração de progresso (evita máscara duplicada e divergente):
+
+```javascript
+// Normaliza: dígitos + um 'X' final, maiúsculo. 'X' fora da última posição é descartado.
+function sanitizarRG(bruto) {
+    let v = String(bruto || '').toUpperCase().replace(/[^0-9X]/g, '');
+    v = v.replace(/X(?=.)/g, '');
+    if (v.endsWith('X')) return v.slice(0, -1).slice(0, 8) + 'X';
+    return v.slice(0, 11);
+}
+
+// Formata progressivamente, tratando o verificador como sufixo do corpo.
+function formatarRG(valor) {
+    const temX  = valor.endsWith('X');
+    const corpo = temX ? valor.slice(0, -1) : valor;
+    let fmt = corpo; /* ... agrupamento por pontos ... */
+    return temX ? fmt + '-X' : fmt;
+}
+```
+
+Dois detalhes que passam despercebidos:
+
+* **`inputmode="numeric"` precisa sair do input.** Em teclado móvel ele impede digitar a letra — o campo fica intransponível justamente para quem tem RG com `X`.
+* **Nomeie a variável pelo que ela guarda.** `rgDigitos` virou `rgValor` quando deixou de ser só dígito; um nome mentiroso propaga a suposição errada para quem for validar ou serializar o campo depois.
 
 #### Validação de Formulário com Erro Visual + Scroll
 

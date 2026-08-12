@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      0.6.1
+// @version      0.6.3
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -31,7 +31,7 @@
     let funcoesSelecionadas = []; // string[]
     let regioesSelecionadas = []; // number[]
     let cpfDigitos = '';          // apenas os dígitos do CPF
-    let rgDigitos = '';           // apenas os dígitos do RG
+    let rgValor = '';             // dígitos do RG, podendo terminar em 'X' (dígito verificador)
     let nacionalidade = 'brasileira'; // pré-preenchido, editável
     let dataNascimento = '';          // DD/MM/AAAA
     let estadoCivil = '';         // estado civil selecionado
@@ -534,7 +534,7 @@
                     <div class="cred-field-block">
                         <label class="cred-section-label" for="cred-rg">RG</label>
                         <input type="text" id="cred-rg" class="cred-cpf-input"
-                               placeholder="00.000.000-0" maxlength="14" inputmode="numeric" autocomplete="nope">
+                               placeholder="00.000.000-X" maxlength="14" autocomplete="nope">
                     </div>
                     <div class="cred-field-block">
                         <label class="cred-section-label" for="cred-nacionalidade">Nacionalidade</label>
@@ -665,6 +665,36 @@
     }
 
     /**
+     * Normaliza o valor digitado no campo RG: mantém apenas dígitos e um 'X'
+     * final (dígito verificador usado por alguns estados, ex.: SP).
+     * Com 'X', o limite é 8 dígitos + verificador; sem 'X', até 11 caracteres
+     * (permite digitar o CPF no lugar do RG, previsto em lei).
+     */
+    function sanitizarRG(bruto) {
+        let v = String(bruto || '').toUpperCase().replace(/[^0-9X]/g, '');
+        v = v.replace(/X(?=.)/g, '');   // 'X' só é válido como último caractere
+        if (v.endsWith('X')) return v.slice(0, -1).slice(0, 8) + 'X';
+        return v.slice(0, 11);
+    }
+
+    /**
+     * Formata o RG progressivamente: 00.000.000-0 (ou -X). Quando o valor tem
+     * mais de 9 dígitos e nenhum 'X', usa o formato de CPF (000.000.000-00).
+     */
+    function formatarRG(valor) {
+        if (valor.length > 9 && !valor.includes('X')) {
+            return valor.slice(0,3)+'.'+valor.slice(3,6)+'.'+valor.slice(6,9)+'-'+valor.slice(9);
+        }
+        const temX  = valor.endsWith('X');
+        const corpo = temX ? valor.slice(0, -1) : valor;
+        let fmt = corpo;
+        if (corpo.length > 8)      fmt = corpo.slice(0,2)+'.'+corpo.slice(2,5)+'.'+corpo.slice(5,8)+'-'+corpo.slice(8);
+        else if (corpo.length > 5) fmt = corpo.slice(0,2)+'.'+corpo.slice(2,5)+'.'+corpo.slice(5);
+        else if (corpo.length > 2) fmt = corpo.slice(0,2)+'.'+corpo.slice(2);
+        return temX ? fmt + '-X' : fmt;
+    }
+
+    /**
      * Registra listeners dos campos do formulário (CPF, função, regiões).
      * Separado para poder ser chamado na reabertura do modal.
      */
@@ -683,35 +713,21 @@
             });
         }
 
-        // RG — máscara progressiva (00.000.000-0 com 9 dígitos; sem traço se apenas 8)
+        // RG — máscara progressiva (00.000.000-0 com 9 caracteres; sem traço se apenas 8).
+        // O dígito verificador pode ser a letra 'X' (ex.: 12.345.678-X).
         // Exceção: aceita 11 dígitos quando iguais ao CPF (uso de CPF no lugar do RG, previsto em lei)
         const rgEl = document.getElementById('cred-rg');
         if (rgEl) {
             rgEl.addEventListener('input', (e) => {
-                let digits = e.target.value.replace(/\D/g, '').slice(0, 11);
-                if (digits.length > 9) {
-                    const ehCpfCompleto = digits.length === 11 && digits === cpfDigitos;
-                    const digitandoCpf  = digits.length === 10 && cpfDigitos && cpfDigitos.startsWith(digits);
-                    if (ehCpfCompleto) {
-                        // Formato CPF: 000.000.000-00
-                        e.target.value = digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6,9)+'-'+digits.slice(9);
-                        rgDigitos = digits;
-                        return;
-                    } else if (digitandoCpf) {
-                        // Digitação incompleta do CPF — exibir parcial sem truncar
-                        e.target.value = digits.slice(0,3)+'.'+digits.slice(3,6)+'.'+digits.slice(6,9)+'-'+digits.slice(9);
-                        rgDigitos = digits;
-                        return;
-                    } else {
-                        digits = digits.slice(0, 9);
-                    }
+                let valor = sanitizarRG(e.target.value);
+                if (valor.length > 9) {
+                    const ehCpfCompleto = valor.length === 11 && valor === cpfDigitos;
+                    // Digitação incompleta do CPF — manter parcial sem truncar
+                    const digitandoCpf  = valor.length === 10 && cpfDigitos && cpfDigitos.startsWith(valor);
+                    if (!ehCpfCompleto && !digitandoCpf) valor = valor.slice(0, 9);
                 }
-                let fmt = digits;
-                if (digits.length > 8)      fmt = digits.slice(0,2)+'.'+digits.slice(2,5)+'.'+digits.slice(5,8)+'-'+digits.slice(8);
-                else if (digits.length > 5) fmt = digits.slice(0,2)+'.'+digits.slice(2,5)+'.'+digits.slice(5);
-                else if (digits.length > 2) fmt = digits.slice(0,2)+'.'+digits.slice(2);
-                e.target.value = fmt;
-                rgDigitos = digits;
+                e.target.value = formatarRG(valor);
+                rgValor = valor;
             });
         }
 
@@ -1676,7 +1692,7 @@
         funcoesSelecionadas = [];
         regioesSelecionadas = [];
         cpfDigitos = '';
-        rgDigitos = '';
+        rgValor = '';
         nacionalidade = 'brasileira';
         dataNascimento = '';
         estadoCivil = '';
@@ -1832,7 +1848,7 @@
             candidato: nomeEl ? nomeEl.value : (dadosExtraidos.candidato || ''),
             nomeConfirmado: nomeConfEl ? nomeConfEl.checked : false,
             cpf: cpfDigitos,
-            rg: rgDigitos,
+            rg: rgValor,
             nacionalidade: nacionalidade,
             dataNascimento: dataNascimento,
             estadoCivil: estadoCivil,
@@ -1862,7 +1878,7 @@
         if (concluido) return true;
         if (!document.getElementById('cred-nome-confirmado')?.checked) return false;
         if (cpfDigitos.length !== 11) return false;
-        if (rgDigitos.length < 8 || (rgDigitos.length > 9 && rgDigitos !== cpfDigitos)) return false;
+        if (rgValor.length < 8 || (rgValor.length > 9 && rgValor !== cpfDigitos)) return false;
         if (!estadoCivil) return false;
         if (cep.length !== 8) return false;
         if (!logradouro.trim()) return false;
@@ -1948,7 +1964,7 @@
 
         // --- Variáveis JS (só sobrescreve se valor salvo não for vazio) ---
         if (dados.cpf)            cpfDigitos = dados.cpf;
-        if (dados.rg)             rgDigitos = dados.rg;
+        if (dados.rg)             rgValor = sanitizarRG(dados.rg);
         if (dados.nacionalidade)  nacionalidade = dados.nacionalidade;
         if (dados.dataNascimento) dataNascimento = dados.dataNascimento;
         if (dados.estadoCivil)    estadoCivil = dados.estadoCivil;
@@ -1981,15 +1997,7 @@
             setVal('cred-cpf', fmt);
         }
         // RG formatado
-        if (rgDigitos) {
-            const d = rgDigitos;
-            let fmt = d;
-            if (d.length === 11)   fmt = d.slice(0,3)+'.'+d.slice(3,6)+'.'+d.slice(6,9)+'-'+d.slice(9);
-            else if (d.length > 8) fmt = d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'-'+d.slice(8);
-            else if (d.length > 5) fmt = d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5);
-            else if (d.length > 2) fmt = d.slice(0,2)+'.'+d.slice(2);
-            setVal('cred-rg', fmt);
-        }
+        if (rgValor) setVal('cred-rg', formatarRG(rgValor));
         setVal('cred-nacionalidade', nacionalidade);
         if (dataNascimento) setVal('cred-nascimento', dataNascimento);
         if (celularDigitos) setVal('cred-celular', formatarCelular(celularDigitos));
@@ -2366,8 +2374,8 @@
             mostrarErroValidacao('cred-cpf', 'CPF inválido — verifique se houve erro de digitação.');
             return false;
         }
-        if (rgDigitos.length < 8 || (rgDigitos.length > 9 && rgDigitos !== cpfDigitos)) {
-            mostrarErroValidacao('cred-rg', rgDigitos.length > 9
+        if (rgValor.length < 8 || (rgValor.length > 9 && rgValor !== cpfDigitos)) {
+            mostrarErroValidacao('cred-rg', rgValor.length > 9
                 ? 'RG com mais de 9 dígitos só é aceito quando igual ao CPF (CPF no lugar de RG).'
                 : 'Preencha o RG do candidato.');
             return false;
@@ -2588,10 +2596,11 @@
      * Fase 1 do fluxo de conclusão (chamada após o clique em "Concluir"):
      * - Fecha o modal de credenciamento
      * - Clica no botão nativo "Responder"
-     * - Aguarda o editor TinyMCE e aciona "Inserir modelos"
-     * - Seleciona "[CRED-CHP014] Inscrição recebida"
-     * - Abre o Select2 de destinatários e seleciona o e-mail do candidato
      * - Exibe dialog de aviso ao usuário
+     *
+     * A escolha do modelo de mensagem e do destinatário fica por conta do
+     * usuário: a ordem dos modelos no dropdown do TinyMCE muda com o tempo e a
+     * seleção automática corria o risco de inserir a mensagem errada.
      */
     async function executarFase1Conclusao() {
         // 1. Fechar o modal
@@ -2609,30 +2618,10 @@
         }
         await new Promise(r => setTimeout(r, 800));
 
-        // 3. Aguardar o botão de inserir modelos (#mceu_11-open) e clicar
-        const btnModelos = await aguardarElemento('#mceu_11-open', 8000);
-        if (btnModelos) {
-            btnModelos.click();
-            await new Promise(r => setTimeout(r, 500));
-
-            // 4. Selecionar a opção "[CRED-CHP014] Inscrição recebida" no dropdown do TinyMCE
-            const opcaoModelo = await aguardarElemento('.mce-text', 3000,
-                el => el.textContent.includes('[CRED-CHP014]'));
-            if (opcaoModelo) {
-                const itemMenu = opcaoModelo.closest('.mce-menu-item') || opcaoModelo;
-                itemMenu.click();
-                await new Promise(r => setTimeout(r, 400));
-            } else {
-                console.warn('[credenciamento] Opção "[CRED-CHP014]" não encontrada no dropdown de modelos.');
-            }
-        } else {
-            console.warn('[credenciamento] Botão de inserir modelos (#mceu_11-open) não encontrado.');
-        }
-
-        // 5. Marcar que estamos aguardando o envio da resposta (Fase 2)
+        // 3. Marcar que estamos aguardando o envio da resposta (Fase 2)
         aguardandoEnvioResposta = true;
 
-        // 6. Exibir aviso para o usuário selecionar o destinatário e verificar o protocolo
+        // 4. Exibir aviso para o usuário escolher o modelo, o destinatário e verificar o protocolo
         mostrarDialogVerificarMensagens();
     }
 
@@ -2653,7 +2642,8 @@
                 <div class="cred-dialog-title">&#128197; Antes de enviar</div>
                 <div class="cred-dialog-body">
                     <p style="margin:0 0 10px">Selecione manualmente o destinatário no campo <strong>"Para"</strong>. O e-mail do(a) candidato(a) é ${emailCandidato}.</p>
-                    <p style="margin:0">Após selecionar, verifique também se o(a) candidato(a) fez mais alguma pergunta no protocolo antes de clicar em <strong>Responder</strong>.</p>
+                    <p style="margin:0 0 10px">Insira também o <strong>modelo de mensagem</strong> pelo botão de modelos do editor.</p>
+                    <p style="margin:0">Antes de clicar em <strong>Responder</strong>, verifique se o(a) candidato(a) fez mais alguma pergunta no protocolo.</p>
                 </div>
                 <div class="cred-dialog-footer">
                     <button class="btn btn-success" id="cred-dialog-verificar-ok">OK</button>
@@ -2699,7 +2689,7 @@
             protocolo,              // 4  E  — Protocolo 1Doc (texto no plain, hyperlink no html)
             motivoInabilitacao,     // 5  F  — Motivo da inabilitação (ex: "VI, X")
             cpfDigitos,             // 6  G  — CPF
-            rgDigitos,              // 7  H  — RG
+            rgValor,                // 7  H  — RG
             nacionalidade,          // 8  I  — Nacionalidade
             dataNascimento,         // 9  J  — Data de Nascimento
             estadoCivil,            // 10 K  — Estado Civil

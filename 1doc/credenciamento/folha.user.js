@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Folha de Frequência (Credenciamento)
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
+// @version      0.2.0
 // @description  Destaca protocolos da folha de frequência no inbox do 1Doc e gerencia a coleta das fichas.
 // @author       Raul Cabral
 // @match        https://pindamonhangaba.1doc.com.br/*

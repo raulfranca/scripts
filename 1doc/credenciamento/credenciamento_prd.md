@@ -9,9 +9,10 @@
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js`
-**Versão atual:** `0.6.1`
+**Versão atual:** `0.6.3`
+**Changelog:** [credenciamento_changelog.md](credenciamento_changelog.md)
 
-> **Versionamento:** este campo reflete o que está publicado (branch `main`). Alterado somente mediante instrução explícita do usuário — nunca por iniciativa do agente de IA.
+> **Versionamento:** este campo reflete o que está publicado (branch `main`) **deste script** — cada script da pasta tem sua própria linha SemVer e seu próprio changelog. Alterado somente mediante instrução explícita do usuário — nunca por iniciativa do agente de IA.
 
 ---
 
@@ -83,7 +84,7 @@ Agilizar e padronizar o processo de credenciamento de professores substitutos an
 
     **Campos do documento de identidade (II)** — ficam lado a lado com `.cred-field-block` por campo:
       * **CPF** — input com máscara progressiva `000.000.000-00` (armazena só dígitos).
-      * **RG** — input aceita apenas dígitos; máscara `00.000.000-0` (9 dígitos). Se o usuário digitar apenas 8 dígitos, o campo formata como `00.000.000` (sem o traço e dígito verificador). Armazena só dígitos em `rgDigitos`.
+      * **RG** — máscara `00.000.000-0` (9 caracteres). Se o usuário digitar apenas 8 dígitos, o campo formata como `00.000.000` (sem o traço e dígito verificador). O **dígito verificador pode ser a letra `X`** (usado por vários estados, SP entre eles): o campo aceita dígitos e um `X` final, normalizado para maiúscula — `12.345.678-X`. `X` em qualquer outra posição é descartado. Com `X`, o limite é 8 dígitos + verificador. Armazena o valor (dígitos, podendo terminar em `X`) em `rgValor`. **Exceção CPF no lugar do RG:** 11 dígitos iguais ao CPF são aceitos e exibidos no formato `000.000.000-00`. A normalização e a formatação ficam em `sanitizarRG` e `formatarRG`, reusadas pela restauração de progresso.
       * **Nacionalidade** — input de texto pré-preenchido com `brasileira` (não apenas placeholder — tem `value` real). Editável pelo usuário. Reseta para `brasileira` a cada novo protocolo.
       * **Data de Nascimento** — input com máscara progressiva `DD/MM/AAAA` (`cred-nascimento`); botão de calendário (`cred-nascimento-picker-btn`) aciona um `input[type=date]` nativo oculto para seleção via date picker. **Campo obrigatório.** A variável `dataNascimento` só é considerada preenchida quando a data está completa (8 dígitos), é uma data de calendário válida **e** o candidato tem ≥ 18 anos; caso contrário fica vazia. Armazena `DD/MM/AAAA`.
     * **Linha 2:** Estado civil — seleção única via botões (`.cred-estadocivil-btn`): Solteiro(a), Casado(a), Divorciado(a), Viúvo(a), Separado(a), União estável. Clicar no botão ativo o deseleciona (toggle). Reseta a cada protocolo.
@@ -161,7 +162,7 @@ O reset ocorre em dois momentos: na abertura do painel (`abrirDialog()`) e na de
 > **Hierarquia de validação ao clicar em "Concluir e copiar":**
 > 1. Checkbox "Este nome é igual ao que está na ficha de inscrição" — deve estar marcado.
 > 2. CPF — 11 dígitos completos **e** válido pelos dois dígitos verificadores (algoritmo de dicasdeprogramacao.com.br; rejeita sequências de dígitos iguais). CPF inválido bloqueia a conclusão com a mensagem `"CPF inválido — verifique se houve erro de digitação."`. **Exceção:** `00000000000` (11 zeros) é aceito como CPF anulado deliberadamente — para quando o candidato não enviou o documento e o campo não pode ficar vazio.
-> 3. RG — mínimo 8 dígitos.
+> 3. RG — mínimo 8 caracteres (dígitos, podendo terminar em `X`). Mais de 9 só é aceito quando o valor é igual ao CPF.
 > 4. Data de Nascimento — obrigatória; `dataNascimento` deve estar preenchida (data completa, válida e candidato ≥ 18 anos). Mensagem distingue campo em branco/incompleto de data inválida ou idade < 18.
 > 5. Estado civil — obrigatório selecionar uma opção.
 > 6. CEP — 8 dígitos.
@@ -208,7 +209,7 @@ A função `prepararDadosClipboard()` lê diretamente das variáveis de estado d
 | E | Protocolo 1Doc | Hyperlink no HTML; texto no plain | `dadosExtraidos.protocolo` + `.url` |
 | F | Motivo da inabilitação | Categorias com "Não" (ex: `VI, X`) ou vazio | `avaliacoesDocs` |
 | G | CPF | Só dígitos | `cpfDigitos` |
-| H | RG | Só dígitos | `rgDigitos` |
+| H | RG | Dígitos, podendo terminar em `X` | `rgValor` |
 | I | Nacionalidade | Texto livre | `nacionalidade` |
 | J | Data de Nascimento | `DD/MM/AAAA` | `dataNascimento` |
 | K | Estado civil | Texto livre | `estadoCivil` |
@@ -254,10 +255,9 @@ Após validação bem-sucedida, o script:
 3. **Marca como concluído e salva o progresso** (inclui flag `_deveAplicarMarcadoresResposta` para a Fase 2).
 4. **Fecha o modal** de credenciamento.
 5. **Clica automaticamente no botão nativo "Responder"** (`button.botao_flutuante_0.bf_v_1.btn-info[rel="1"]`).
-6. **Aguarda o editor TinyMCE** carregar e clica no botão **"Inserir modelos"** (`#mceu_11-open`).
-7. **Seleciona o modelo** `[CRED-CHP014] Insc. recebida` no dropdown do TinyMCE (busca por `.mce-text` contendo `[CRED-CHP014]`).
-8. **Abre o Select2 de destinatários** (`#s2id_id_setor_responde .select2-choice`) e seleciona automaticamente a opção cujo texto contenha o e-mail do candidato (variável `email`).
-9. **Exibe um dialog** de aviso: *"Antes de enviar a resposta padrão, verifique se o(a) candidato(a) fez mais alguma pergunta no protocolo."*
+6. **Exibe um dialog** de aviso pedindo que o usuário: selecione o destinatário no campo "Para" (o dialog mostra o e-mail extraído do candidato), insira o modelo de mensagem pelo botão de modelos do editor e verifique se o(a) candidato(a) fez mais alguma pergunta no protocolo antes de enviar.
+
+> **A escolha do modelo de mensagem e do destinatário é do usuário — o script não seleciona nenhum dos dois.** Até a versão 0.6.2 o script clicava em "Inserir modelos" (`#mceu_11-open`) e escolhia `[CRED-CHP014] Insc. recebida` automaticamente. Isso foi removido em 0.6.3: a ordem e a composição dos modelos no dropdown do TinyMCE mudam com o tempo, e a seleção automática corria o risco de inserir a mensagem errada no protocolo do candidato.
 
 Em seguida, `aguardandoEnvioResposta` é definido como `true`. O usuário fica livre para navegar pelo protocolo e verificar as mensagens.
 
@@ -313,7 +313,10 @@ Um listener em `document.body` (capture phase) intercepta o clique em `#enviar_d
 **Domínio (`@match`):** `https://pindamonhangaba.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/inbox.user.js`
-**Versão atual:** `0.6.1`
+**Versão atual:** `0.6.0`
+**Changelog:** [inbox_changelog.md](inbox_changelog.md)
+
+> Este script tem linha de versão própria, independente do `credenciamento.user.js`.
 
 ---
 
