@@ -7,9 +7,16 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ---
 
-> **Regra de versionamento:** o número aqui é o `@version` **deste script** e representa o que está publicado (branch `main`). Cada script do monorepo tem changelog e numeração próprios — uma mudança em `folha.user.js` não bumpa `credenciamento.user.js`. O progresso fica em `## [Não publicado]` até o usuário disparar um lançamento. O agente de IA **nunca** altera `@version` nem promove `[Não publicado]` sem instrução explícita do usuário.
+> **Regra de versionamento:** o número aqui é o `@version` **deste script**. Cada script do monorepo tem changelog e numeração próprios — uma mudança em `folha.user.js` não bumpa `credenciamento.user.js`. Toda tarefa que altera o comportamento do script encerra com o bump da versão: MINOR para funcionalidade/comportamento perceptível, PATCH para correção; MAJOR **somente** com instrução explícita do usuário (ver regra 7 do `CLAUDE.md`). `## [Não publicado]` guarda o trabalho em andamento e é promovido a `## [X.Y.Z] — AAAA-MM-DD` no fim da tarefa.
 
 ## [Não publicado]
+
+## [0.7.0] — 2026-08-12
+
+### Alterado
+
+- **Fim do fluxo de conclusão passa a fechar a janela do protocolo (nova função `fecharJanelaProtocolo`):** após o envio da resposta, o arquivamento e a abertura da aba da planilha, o script aguarda 1,5s (para o 1Doc processar o arquivamento) e chama `window.close()` em vez de deixar a janela ser redirecionada. Como o protocolo é aberto pelo `inbox.user.js` via `window.open('cred-protocolo')`, o navegador permite fechá-la por script e o usuário volta ao inbox, que continua aberto na janela de origem. Se o protocolo tiver sido aberto no próprio tab (opção "Dividir tela" desativada), o `close()` é bloqueado pelo navegador — nesse caso o script apenas registra `console.warn` e **não** navega para outra URL.
+- **Confirmação do arquivamento passou a usar `aguardarElemento`:** o `setInterval` manual que esperava o `#sim` do dialog de arquivamento foi trocado por `await aguardarElemento('#sim', 5000)`, mesmo timeout de antes. Necessário para que o fechamento da janela só ocorra depois da confirmação do arquivamento.
 
 ## [0.6.3] — 2026-08-12
 

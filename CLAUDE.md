@@ -52,15 +52,29 @@ compartilhado: uma mudança em `folha.user.js` **não** bumpa `credenciamento.us
    3. Se for necessário entender o fluxo completo, aí então leia o script inteiro.
    4. Ao alterar nomes de funções, adicionar novas ou mudar a responsabilidade de alguma, atualize `credenciamento_index.md`.
 
-7. **Versionamento (por script)** — cada script tem sua própria linha SemVer. O número de versão (`@version` no script, `Versão atual` no PRD, cabeçalho no `<script>_changelog.md`) representa **o que está publicado** (branch `main`) **daquele script**. Regras obrigatórias:
-   * **Nunca** altere `@version`, `Versão atual` no PRD nem promova `## [Não publicado]` por conta própria.
-   * Durante o trabalho, registre tudo em `## [Não publicado]` no changelog do script afetado.
-   * Bumpe apenas os scripts que realmente mudaram — os `@version` dos demais ficam intactos.
-   * Somente quando o usuário solicitar explicitamente (ex.: "publique como 0.4.0"), execute:
-     1. Atualize `@version` no cabeçalho do script.
-     2. Atualize `Versão atual` no PRD correspondente.
-     3. No changelog do script: renomeie `## [Não publicado]` para `## [X.Y.Z] — AAAA-MM-DD` e crie um novo `## [Não publicado]` vazio acima.
+7. **Versionamento (por script)** — cada script tem sua própria linha SemVer. O número de versão (`@version` no script, `Versão atual` no PRD, cabeçalho no `<script>_changelog.md`) é **a versão daquele script**. **Toda tarefa que altera o comportamento de um script encerra com o bump da versão dele** — não espere o usuário pedir.
+
+   **Como classificar (projeto em `0.x`, pré-lançamento):**
+
+   | Incremento | Quando |
+   |---|---|
+   | **MAJOR** (`1.0.0`) | **Somente com instrução explícita do usuário.** Enquanto a versão começar com `0.`, nem breaking change promove MAJOR — ela vira MINOR (regra do SemVer para `0.x`). |
+   | **MINOR** (`0.7.0`) | Nova funcionalidade, mudança de comportamento perceptível ao usuário, remoção de funcionalidade ou breaking change. |
+   | **PATCH** (`0.6.4`) | Correção de bug sem nova funcionalidade, e ajustes internos com efeito visível mínimo (texto, cor, layout já especificado). |
+
+   **Não bumpa:** refatoração sem efeito visível, mudança só em `.md` (documentação, PRD, índice, comentários). Nesses casos não há entrada de changelog e a versão fica intacta.
+
+   **Procedimento no fim da tarefa** (executar para **cada** script alterado; os `@version` dos demais ficam intactos):
+   1. Registre a mudança em `## [Não publicado]` no changelog do script durante o trabalho.
+   2. Classifique o incremento pela tabela acima e calcule o novo número a partir do `@version` atual daquele script.
+   3. Renomeie `## [Não publicado]` para `## [X.Y.Z] — AAAA-MM-DD` (data de hoje) e crie um novo `## [Não publicado]` vazio acima.
+   4. Atualize `@version` no cabeçalho do script.
+   5. Atualize `Versão atual` no PRD correspondente.
+   6. **Informe no fim da resposta** qual versão saiu e por que aquele incremento — o usuário pode discordar da classificação.
+
    * Os três lugares (`@version`, PRD, changelog) devem sempre concordar. Se divergirem, o `@version` do script publicado em `main` é a referência — ajuste os outros dois e siga a partir dele.
+   * Uma tarefa = um bump por script alterado. Iterações e correções dentro da **mesma** tarefa entram na mesma versão, não geram uma nova.
+   * O bump **não** publica nada: a distribuição pelo TamperMonkey só acontece no merge de `dev` para `main`, que continua sendo ato deliberado do usuário.
 
 ## Checklist de início de tarefa
 
@@ -92,7 +106,8 @@ Runtimes disponíveis no shell (Bash/Git Bash) para scripts de verificação for
 
 Antes de encerrar:
 
-1. **`<script>_changelog.md`** — registrar em `## [Não publicado]` **do changelog do script alterado** toda mudança de função, UI, variável de estado ou comportamento. Um arquivo por script; se dois scripts mudaram, duas entradas. Pular se só houve mudança em documentação.
-2. **`credenciamento_index.md`** — atualizar se: função criada, renomeada ou removida; variável de estado adicionada ou removida; descrição de responsabilidade ficou desatualizada.
-3. **`credenciamento_prd.md`** — atualizar se: requisito funcional adicionado, alterado ou removido; campo do formulário ou coluna da planilha criado/removido; regra de validação mudou; novo seletor DOM relevante foi identificado.
-4. **`documentacao_1doc.md`** — atualizar se: nova técnica aplicada, limitação descoberta ou diretriz recebida do usuário que deve valer para tarefas futuras.
+1. **`<script>_changelog.md`** — registrar **do changelog do script alterado** toda mudança de função, UI, variável de estado ou comportamento. Um arquivo por script; se dois scripts mudaram, duas entradas. Pular se só houve mudança em documentação.
+2. **Bump de versão (regra 7)** — para cada script alterado: classificar o incremento (MINOR = comportamento/funcionalidade; PATCH = correção), promover `## [Não publicado]` para `## [X.Y.Z] — AAAA-MM-DD`, criar `## [Não publicado]` vazio acima, e atualizar `@version` no script **e** `Versão atual` no PRD. MAJOR só com instrução explícita do usuário. Informar na resposta a versão gerada e o motivo.
+3. **`credenciamento_index.md`** — atualizar se: função criada, renomeada ou removida; variável de estado adicionada ou removida; descrição de responsabilidade ficou desatualizada.
+4. **`credenciamento_prd.md`** — atualizar se: requisito funcional adicionado, alterado ou removido; campo do formulário ou coluna da planilha criado/removido; regra de validação mudou; novo seletor DOM relevante foi identificado.
+5. **`documentacao_1doc.md`** — atualizar se: nova técnica aplicada, limitação descoberta ou diretriz recebida do usuário que deve valer para tarefas futuras.

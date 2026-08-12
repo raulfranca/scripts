@@ -7,7 +7,7 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ---
 
-> **Regra de versionamento:** o número aqui é o `@version` **deste script** e representa o que está publicado (branch `main`). Cada script do monorepo tem changelog e numeração próprios. O progresso fica em `## [Não publicado]` até o usuário disparar um lançamento. O agente de IA **nunca** altera `@version` nem promove `[Não publicado]` sem instrução explícita do usuário.
+> **Regra de versionamento:** o número aqui é o `@version` **deste script**. Cada script do monorepo tem changelog e numeração próprios. Toda tarefa que altera o comportamento do script encerra com o bump da versão: MINOR para funcionalidade/comportamento perceptível, PATCH para correção; MAJOR **somente** com instrução explícita do usuário (ver regra 7 do `CLAUDE.md`). `## [Não publicado]` guarda o trabalho em andamento e é promovido a `## [X.Y.Z] — AAAA-MM-DD` no fim da tarefa.
 
 ## [Não publicado]
 

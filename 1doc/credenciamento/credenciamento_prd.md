@@ -9,7 +9,7 @@
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js`
-**Versão atual:** `0.6.3`
+**Versão atual:** `0.7.0`
 **Changelog:** [credenciamento_changelog.md](credenciamento_changelog.md)
 
 > **Versionamento:** este campo reflete o que está publicado (branch `main`) **deste script** — cada script da pasta tem sua própria linha SemVer e seu próprio changelog. Alterado somente mediante instrução explícita do usuário — nunca por iniciativa do agente de IA.
@@ -273,6 +273,7 @@ Um listener em `document.body` (capture phase) intercepta o clique em `#enviar_d
 4. **Clica em `#sim`** para confirmar o envio da resposta.
 5. **Arquiva o protocolo automaticamente:** aguarda 1,5s (para o 1Doc processar o envio), clica no botão nativo "Arquivar" (`button.botao_flutuante_3.bf_v_3[title="Arquivar"]`) e confirma o dialog `#sim`. Se o botão não for encontrado, registra `console.warn` e continua.
 6. **Abre/alterna para a aba da planilha** (`window.open(PLANILHA_URL, 'cred-planilha')`).
+7. **Fecha a janela do protocolo** (`fecharJanelaProtocolo()`), após aguardar 1,5s para o 1Doc processar o arquivamento. A janela foi aberta pelo `inbox.user.js` via `window.open('cred-protocolo')`, então o navegador permite fechá-la por script e o usuário volta ao inbox, que continua aberto na janela de origem. **O script não navega para outra URL ao final do fluxo.** Se o protocolo tiver sido aberto no próprio tab (opção "Dividir tela" desativada), o navegador bloqueia o `window.close()` — nesse caso o script apenas registra `console.warn` e não redireciona.
 
 > O progresso no `localStorage` **não é apagado** após a cópia.\n>
 >

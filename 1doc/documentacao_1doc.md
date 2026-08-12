@@ -40,6 +40,7 @@ Daí a convenção vigente (definida pelo usuário em 2026-08-12):
 
 * **Um changelog por script:** `<nome-do-script>_changelog.md`, ao lado do script — mesmo padrão de `<nome-do-script>_prd.md`.
 * **Uma linha SemVer por script:** o número no changelog é o `@version` daquele script. Mudança em um script **não** bumpa os outros.
+* **O bump é feito ao fim de cada tarefa que muda comportamento** (regra definida pelo usuário em 2026-08-12), nos três lugares de uma vez: `@version`, PRD e changelog. MINOR para funcionalidade ou comportamento perceptível, PATCH para correção; MAJOR só por instrução explícita. Refatoração invisível e mudança apenas em `.md` não bumpam. Ver a tabela completa na regra 7 do `CLAUDE.md`.
 * **`@version`, "Versão atual" no PRD e cabeçalho do changelog devem sempre concordar.** Quando divergirem, o `@version` publicado em `main` é a referência.
 * Uma tarefa que toca dois scripts gera **duas** entradas, uma em cada changelog.
 
@@ -518,6 +519,17 @@ function navegarInbox() {
 ```
 
 > Use `location.origin` como fallback caso a chave não exista (ex: primeiro acesso após limpar localStorage).
+
+> **Quando a janela foi aberta por script, feche-a em vez de navegar.** Se o protocolo foi aberto a partir do inbox via `window.open('cred-protocolo', ...)`, o inbox continua vivo na janela de origem — ao terminar o fluxo, `window.close()` devolve o usuário exatamente onde ele estava, sem recarregar a listagem nem perder scroll/filtros. Navegar para a URL do inbox nessa situação cria uma segunda cópia do inbox e deixa a janela do protocolo aberta. Dois cuidados:
+> * **Feche só depois que a última requisição terminar** (ex: confirmação do arquivamento). Fechar antes aborta o request em voo.
+> * **`window.close()` só é permitido em janelas abertas por script.** Se o usuário desativou a divisão de tela e o protocolo abriu no próprio tab, o navegador ignora a chamada. Não use `location.href` como fallback — apenas registre o aviso:
+>
+> ```javascript
+> window.close();
+> setTimeout(() => {
+>     if (!window.closed) console.warn('[script] Fechamento bloqueado — janela não foi aberta por script.');
+> }, 300);
+> ```
 
 ### 5.11 Leitura de `.xlsx` em Userscript sem Dependências Externas
 

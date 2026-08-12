@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      0.6.3
+// @version      0.7.0
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -2593,6 +2593,23 @@
     }
 
     /**
+     * Fecha a janela do protocolo ao final do fluxo de conclusão.
+     * A janela é aberta pelo inbox.user.js via window.open('cred-protocolo'), então
+     * o navegador permite fechá-la por script e o usuário volta ao inbox de origem.
+     * Se a página tiver sido aberta no próprio tab (opção "Dividir tela" desativada),
+     * o navegador bloqueia o close — nesse caso apenas registra o aviso e não navega
+     * para lugar nenhum.
+     */
+    function fecharJanelaProtocolo() {
+        window.close();
+        setTimeout(() => {
+            if (!window.closed) {
+                console.warn('[credenciamento] Fechamento automático bloqueado — a janela não foi aberta por script.');
+            }
+        }, 300);
+    }
+
+    /**
      * Fase 1 do fluxo de conclusão (chamada após o clique em "Concluir"):
      * - Fecha o modal de credenciamento
      * - Clica no botão nativo "Responder"
@@ -3050,23 +3067,24 @@
                          || document.querySelector('button[title="Arquivar"].botao_flutuante_3');
         if (btnArquivar) {
             btnArquivar.click();
-            let tentativas = 0;
-            const aguardarSimArquivar = setInterval(() => {
-                const btnSimArq = document.getElementById('sim');
-                if (btnSimArq) {
-                    clearInterval(aguardarSimArquivar);
-                    btnSimArq.click();
-                } else if (++tentativas >= 50) { // timeout 5s
-                    clearInterval(aguardarSimArquivar);
-                    console.warn('[credenciamento] Dialog de confirmação do Arquivar não apareceu.');
-                }
-            }, 100);
+            const btnSimArq = await aguardarElemento('#sim', 5000);
+            if (btnSimArq) {
+                btnSimArq.click();
+            } else {
+                console.warn('[credenciamento] Dialog de confirmação do Arquivar não apareceu.');
+            }
         } else {
             console.warn('[credenciamento] Botão Arquivar não encontrado — pulando arquivamento automático.');
         }
 
         // Abrir/alternar para a aba da planilha de controle
         window.open(PLANILHA_URL, 'cred-planilha');
+
+        // Fechar a janela do protocolo (aberta pelo inbox via window.open):
+        // ao fechar, o usuário volta para o inbox, que continua na janela de origem.
+        // Aguarda o 1Doc processar o arquivamento antes de encerrar a janela.
+        await new Promise(r => setTimeout(r, 1500));
+        fecharJanelaProtocolo();
     }, true); // capture phase: garante execução antes dos handlers nativos do 1Doc
 
     setInterval(() => {
