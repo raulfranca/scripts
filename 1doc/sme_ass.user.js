@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Triagem de Assinaturas (Pindamonhangaba)
 // @namespace    http://tampermonkey.net/
-// @version      2.10.0
+// @version      2.11.0
 // @description  Triagem inteligente dos documentos que requerem assinatura no 1Doc.
 // @author       Raul Cabral
 // @match        https://pindamonhangaba.1doc.com.br/*
@@ -130,6 +130,7 @@
         .stat-badge { padding: 5px 10px; border-radius: 12px; color: white; }
         .stat-total { background: #6c757d; }
         .stat-assinados { background: #468847; }
+        .stat-cancelados { background: #999999; }
         .stat-pendentes { background: #b94a48; }
 
         .drawer-body { padding: 20px; overflow-y: auto; flex-grow: 1; background: #f4f5f7; }
@@ -145,6 +146,7 @@
         }
         .status-assinado { background-color: #468847; }
         .status-pendente { background-color: #f89406; }
+        .status-cancelado { background-color: #999999; }
         .sig-content { font-size: 13px; color: #333; line-height: 1.5; }
         .sig-emp {
             background-color: #999999; border-radius: 3px; padding: 2px 4px;
@@ -247,6 +249,7 @@
                 <div class="drawer-stats">
                     <span class="stat-badge stat-total" id="stat-total">Solicitadas: 0</span>
                     <span class="stat-badge stat-assinados" id="stat-assinados">Assinados: 0</span>
+                    <span class="stat-badge stat-cancelados" id="stat-cancelados" style="display: none;">Canceladas: 0</span>
                     <span class="stat-badge stat-pendentes" id="stat-pendentes">Pendentes: 0</span>
                 </div>
             </div>
@@ -311,6 +314,40 @@
     // ==========================================
     // 3. LÓGICA DE BUSCA, ORDENAÇÃO E SCROLL
     // ==========================================
+
+    // Aparência de cada status no painel. 'cancelado' é resolvido: conta como concluído.
+    const VISUAL_STATUS = {
+        assinado:  { classe: 'status-assinado',  icone: 'icon-certificate',  rotulo: 'Assinado'  },
+        cancelado: { classe: 'status-cancelado', icone: 'icon-ban-circle',   rotulo: 'Cancelada' },
+        pendente:  { classe: 'status-pendente',  icone: 'icon-time',         rotulo: 'Pendente'  }
+    };
+
+    // Lê o selo de status que o 1Doc renderiza à direita do despacho.
+    // A classificação é por TEXTO (não por classe CSS) porque o selo de cancelamento
+    // não usa .badge-success e sua classe não é estável entre versões do 1Doc.
+    // 'cancelad' é testado antes de 'assinado' — o texto do cancelamento pode citar assinatura.
+    function classificarStatusAssinatura(caixa) {
+        // O selo fica no canto direito do despacho (.btn-group.pull-right); os badges soltos
+        // entram como rede de segurança caso o cancelamento seja renderizado fora dele.
+        // Só selos são lidos — varrer a caixa inteira daria falso positivo com nome de anexo.
+        const candidatos = caixa.querySelectorAll('.btn-group.pull-right, .badge, .label');
+        let alvo = '';
+        candidatos.forEach(el => { alvo += ' ' + (el.innerText || el.textContent || ''); });
+        alvo = alvo.toLowerCase();
+
+        if (alvo.includes('cancelad')) return 'cancelado';
+        if (alvo.includes('assinado')) return 'assinado';
+        return 'pendente';
+    }
+
+    // O selo de canceladas só aparece quando existe alguma — não polui o painel no caso comum.
+    function atualizarStatCancelados(quantidade) {
+        const badge = document.getElementById('stat-cancelados');
+        if (!badge) return;
+        badge.innerText = `Canceladas: ${quantidade}`;
+        badge.style.display = quantidade > 0 ? '' : 'none';
+    }
+
     function buscarAssinaturas(isAutoBackground = false) {
         const resultsContainer = document.getElementById('drawer-results');
         const btnArquivar = document.getElementById('btn-arquivar-drawer');
@@ -326,13 +363,14 @@
             document.getElementById('stat-total').innerText = `Solicitadas: 0`;
             document.getElementById('stat-assinados').innerText = `Assinados: 0`;
             document.getElementById('stat-pendentes').innerText = `Pendentes: 0`;
+            atualizarStatCancelados(0);
             resultsContainer.innerHTML = `<div style="text-align: center; color: #666; padding: 20px;">Adicione um ou mais nomes para começar a triagem.</div>`;
             return;
         }
 
         const nomesBuscaLower = nomesSalvos.map(n => n.toLowerCase());
 
-        let total = 0; let assinados = 0; let pendentes = 0;
+        let total = 0; let assinados = 0; let cancelados = 0; let pendentes = 0;
         let index = 0;
         const listaResultados = []; // Array para permitir a ordenação cronológica
 
@@ -369,20 +407,19 @@
                     const docMatch = textoAcao.match(/em\s+(Despacho.*?)(?:\n|$)/i) || textoAcao.match(/em\s+(.*?)(?:\n|$)/i);
                     if (docMatch && docMatch[1]) { documento = docMatch[1].trim(); }
 
-                    const assinadoBadge = caixa.querySelector('.btn-group.pull-right .badge-success');
-                    const isAssinado = assinadoBadge && assinadoBadge.innerText.toLowerCase().includes('assinado');
+                    const status = classificarStatusAssinatura(caixa);
 
-                    if (isAssinado) assinados++; else pendentes++;
+                    if (status === 'assinado') assinados++;
+                    else if (status === 'cancelado') cancelados++;
+                    else pendentes++;
                     total++;
 
-                    const statusClass = isAssinado ? "status-assinado" : "status-pendente";
-                    const icone = isAssinado ? "icon-certificate" : "icon-time";
-                    const statusStr = isAssinado ? "Assinado" : "Pendente";
+                    const visual = VISUAL_STATUS[status];
 
                     const htmlBox = `
                         <div class="sig-box" data-target="${uniqueTargetId}" title="Clique para ir até o despacho na página">
-                            <div class="sig-status ${statusClass}">
-                                <i class="${icone} icon-white"></i> ${statusStr}
+                            <div class="sig-status ${visual.classe}">
+                                <i class="${visual.icone} icon-white"></i> ${visual.rotulo}
                             </div>
                             <div class="sig-content">
                                 ${dataHora} <span class="sig-name">${solicitante}</span> <span class="sig-emp">${depto}</span>
@@ -396,7 +433,7 @@
                         id: uniqueTargetId,
                         timestamp: timestamp,
                         index: index,
-                        isAssinado: isAssinado,
+                        status: status,
                         html: htmlBox
                     });
                 }
@@ -413,6 +450,7 @@
         document.getElementById('stat-total').innerText = `Solicitadas: ${total}`;
         document.getElementById('stat-assinados').innerText = `Assinados: ${assinados}`;
         document.getElementById('stat-pendentes').innerText = `Pendentes: ${pendentes}`;
+        atualizarStatCancelados(cancelados);
 
         if (total === 0) {
             resultsContainer.innerHTML = `<div style="text-align: center; color: #666; padding: 20px;">Nenhuma solicitação encontrada para os nomes da lista.</div>`;
@@ -439,7 +477,8 @@
                 btnMarcar.title = "Aperte Enter para marcar como pendente";
                 btnMarcar.dataset.status = "pendente";
             }
-        } else if (total > 0 || total === 0) { // Mostra arquivar se total for 0 (nenhuma solicitação = pode arquivar)
+        } else {
+            // Sem pendências: tudo assinado, cancelado ou sem nenhuma solicitação = pode arquivar.
             btnArquivar.disabled = false; btnArquivar.style.display = 'flex';
         }
 
@@ -447,12 +486,12 @@
         let targetToScroll = null;
         if (pendentes > 0) {
             // Rola para a MAIS ANTIGA pendente
-            const pendentesList = listaResultados.filter(i => !i.isAssinado);
+            const pendentesList = listaResultados.filter(i => i.status === 'pendente');
             if (pendentesList.length > 0) targetToScroll = pendentesList[0].id; // Já está ordenado ascendente
         } else if (total > 0) {
-            // Rola para a MAIS RECENTE assinada
-            const assinadosList = listaResultados.filter(i => i.isAssinado);
-            if (assinadosList.length > 0) targetToScroll = assinadosList[assinadosList.length - 1].id;
+            // Rola para a MAIS RECENTE resolvida (assinada ou cancelada)
+            const resolvidosList = listaResultados.filter(i => i.status !== 'pendente');
+            if (resolvidosList.length > 0) targetToScroll = resolvidosList[resolvidosList.length - 1].id;
         }
 
         const aplicarFocoEScroll = () => {

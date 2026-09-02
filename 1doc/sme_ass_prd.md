@@ -1,6 +1,7 @@
 # Product Requirements Document (PRD)
 
 **Nome (`@name`):** 1Doc - Triagem de Assinaturas (Pindamonhangaba)
+**Versão atual:** 2.11.0
 **Autor (`@author`):** Raul Cabral
 **Domínio (`@match`):** `https://pindamonhangaba.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
@@ -20,7 +21,7 @@ O script foi criado para automatizar e otimizar o fluxo de trabalho dos servidor
 3. **Abertura Inteligente:** Se encontrar solicitações (e o *auto-abrir* estiver ativado), um painel superior desce automaticamente com o resumo de todas as assinaturas ordenadas cronologicamente, rolando a página até a assinatura mais relevante.
 4. **Ação Rápida (1 Click / 1 Enter):**
 * **Cenário A (Há pendências):** O botão amarelo "Marcar" ganha foco. O usuário tecla `Enter`, o script aplica a tag "FALTA ASSINAR" e volta para a caixa de entrada. Se já estiver marcado, apenas volta para a caixa de entrada.
-* **Cenário B (Tudo assinado):** O botão verde "Arquivar" ganha foco. O usuário tecla `Enter`, o script remove a tag de pendência (se houver), arquiva o documento, para de acompanhar e fecha o modal automaticamente.
+* **Cenário B (Tudo resolvido — assinado e/ou cancelado):** O botão verde "Arquivar" ganha foco. O usuário tecla `Enter`, o script remove a tag de pendência (se houver), arquiva o documento, para de acompanhar e fecha o modal automaticamente.
 
 
 
@@ -32,7 +33,7 @@ O script foi criado para automatizar e otimizar o fluxo de trabalho dos servidor
 
 * **Ponto de Entrada:** Um botão azul com ícone de certificado/caneta inserido ao lado do botão nativo de "Marcadores" (Tags) do 1Doc.
 * **Layout:** Um painel deslizante superior (Drawer) que não bloqueia a visão do documento inteiro, contendo:
-* **Header Superior:** Caixa de texto para inclusão de nomes, botão "Incluir", toggle "Auto-abrir" (Switch iOS style), botões de ação ("Marcar" e "Arquivar") e barra de estatísticas (Total, Assinados, Pendentes).
+* **Header Superior:** Caixa de texto para inclusão de nomes, botão "Incluir", toggle "Auto-abrir" (Switch iOS style), botões de ação ("Marcar" e "Arquivar") e barra de estatísticas (Solicitadas, Assinados, Canceladas, Pendentes). O selo "Canceladas" fica oculto quando não há nenhuma cancelada.
 * **Header Inferior:** Área para exibição dos *Chips* (etiquetas) com os nomes salvos.
 * **Corpo:** Lista dos despachos encontrados contendo a solicitação, replicando o design nativo (caixas brancas com bordas, tags verdes/vermelhas de status).
 
@@ -51,20 +52,34 @@ O script foi criado para automatizar e otimizar o fluxo de trabalho dos servidor
 * **Ordenação Cronológica:** Todos os despachos encontrados devem ter sua data lida e convertida. Os cards exibidos no *Drawer* devem estar sempre ordenados do mais antigo para o mais recente.
 * **Scroll Inteligente:** Ao abrir o painel, a janela (`window`) deve rolar suavemente para destacar o card no documento original, deixando uma margem visual exata do tamanho do Drawer:
 * Se houver pendências: rola para a pendência *mais antiga*.
-* Se não houver pendências: rola para a assinatura *mais recente*.
+* Se não houver pendências: rola para a solicitação resolvida *mais recente* (assinada ou cancelada).
 
 
 * O item focado recebe uma animação CSS de "piscar amarelo" (`highlight-target`) por 2 segundos.
 
+### 3.3.1. Status de cada solicitação (Assinado / Cancelada / Pendente)
+
+Cada solicitação encontrada recebe um dos três status, lido do selo que o 1Doc renderiza à direita do despacho:
+
+| Status | Tag no painel | Como é detectado | Efeito na triagem |
+|---|---|---|---|
+| **Assinado** | Verde, `icon-certificate` | Texto do selo contém `assinado` | Resolvido |
+| **Cancelada** | Cinza, `icon-ban-circle` | Texto do selo contém `cancelad` | **Resolvido — equivale a concluído** |
+| **Pendente** | Laranja, `icon-time` | Nenhum dos anteriores | Bloqueia o arquivamento |
+
+* **A classificação é por texto, não por classe CSS.** O selo de cancelamento não usa `.badge-success` e sua classe não é estável entre versões do 1Doc; a leitura considera `.btn-group.pull-right`, `.badge` e `.label` dentro do despacho. `cancelad` é testado **antes** de `assinado`. Somente selos são lidos — varrer a caixa inteira produziria falso positivo com nome de anexo.
+* **Cancelada conta como resolvida:** só entram em `Pendentes` as solicitações realmente pendentes. Um protocolo cujas solicitações estão todas assinadas e/ou canceladas cai no Cenário B (§3.5): o marcador "FALTA ASSINAR" **não** é aplicado e `Enter` arquiva.
+* O evento de cancelamento em si ("*Fulano realizou o cancelamento da solicitação de assinatura de…*") é um despacho separado na timeline e **não** é contabilizado como solicitação — só a caixa original ("*solicitou a assinatura de…*") entra na contagem.
+
 ### 3.4. Automação do Botão "Marcar" (Cenário Pendente)
 
-* **Condição de Exibição:** Fica visível, ativo e em foco (pronto para `Enter`) caso haja *pelo menos uma* assinatura pendente.
+* **Condição de Exibição:** Fica visível, ativo e em foco (pronto para `Enter`) caso haja *pelo menos uma* assinatura pendente (canceladas não contam como pendentes).
 * **Comportamento 1 (Sem a Tag):** Injeta um `<script>` com jQuery para localizar a opção "FALTA ASSINAR" no `#marcadores_ids` e aplicá-la via `.val(...).trigger('change')`. Aguarda a resposta do servidor e clica no botão Voltar (`.icon-chevron-left`). **Não deve usar** simulação de cliques (`MouseEvent`, `dispatchEvent`) no Select2, pois essa abordagem falha consistentemente no 1Doc.
 * **Comportamento 2 (Com a Tag):** Se o script detectar na tela que a tag "FALTA ASSINAR" já existe, o botão muda para "✔ Marcado". Teclar `Enter` ignora a injeção da tag e apenas aciona o botão Voltar.
 
-### 3.5. Automação do Botão "Arquivar" (Cenário Assinado/Resolvido)
+### 3.5. Automação do Botão "Arquivar" (Cenário Assinado/Cancelado/Resolvido)
 
-* **Condição de Exibição:** Fica visível, ativo e em foco caso haja *zero* assinaturas pendentes (mesmo que o total solicitado seja zero, permitindo arquivamento rápido de documentos sem relação com assinaturas).
+* **Condição de Exibição:** Fica visível, ativo e em foco caso haja *zero* assinaturas pendentes — inclusive quando as solicitações existentes estão todas canceladas, e mesmo que o total solicitado seja zero (permitindo arquivamento rápido de documentos sem relação com assinaturas).
 * **Comportamento:** 1. Verifica se a tag "FALTA ASSINAR" está na tela. Se sim, injeta jQuery para removê-la especificamente e aguarda 500ms.
 2. Clica nativamente no botão flotuante "Arquivar + Parar de Acompanhar".
 3. Abre um `setInterval` de altíssima velocidade (100ms) espiando a renderização do modal de confirmação. Assim que o botão `#sim` renderizar na tela, clica nele instantaneamente, efetivando o arquivamento sem interação humana.

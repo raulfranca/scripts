@@ -31,7 +31,8 @@
       "Bash(curl -s -o /dev/null -w \"arquivo .xlsx no raw: HTTP %{http_code}\\\\n\" \"https://raw.githubusercontent.com/raulfranca/scripts/350c7937ad91dd6814c6fd7bd4c211d75c2b6560/1doc/credenciamento/ref/horas-trabalhadas_2026-07-01_a_2026-07-31.xlsx\")",
       "Bash(curl -s -I \"https://raw.githubusercontent.com/raulfranca/scripts/350c7937ad91dd6814c6fd7bd4c211d75c2b6560/1doc/credenciamento/ref/horas-trabalhadas_2026-07-01_a_2026-07-31.xlsx\")",
       "Bash(ls \"C:/Users/rfranca/.claude/projects/c--dev-scripts/memory/\")",
-      "Read(//c/Users/rfranca/.claude/projects/c--dev-scripts/memory/**)"
+      "Read(//c/Users/rfranca/.claude/projects/c--dev-scripts/memory/**)",
+      "Bash(node --check sme_ass.user.js)"
     ],
     "additionalDirectories": [
       "\\tmp"

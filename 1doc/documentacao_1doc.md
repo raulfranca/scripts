@@ -84,6 +84,40 @@ O 1Doc renderiza o histórico de ações em blocos específicos. O monitoramento
 * **Texto da Ação (ex: "solicitou a assinatura de..."):** `.marcou_quem`
 * **Badge de Status Interno (ex: Assinado):** `.btn-group.pull-right .badge-success`
 
+#### Status de uma solicitação de assinatura: ler o texto do selo, não a classe
+
+Uma solicitação de assinatura tem **três** desfechos visíveis no despacho, não dois:
+
+| Desfecho | Selo à direita do despacho |
+|---|---|
+| Assinada | `.badge-success` verde com "Assinado" |
+| **Cancelada** | selo cinza "Cancelada" — **não** usa `.badge-success` |
+| Pendente | nenhum selo de status |
+
+Filtrar por `.badge-success` classifica a cancelada como *pendente* — foi o bug que motivou esta nota (encontrado em 2026-09-02 no `sme_ass.user.js`). Como a classe do selo de cancelamento não é estável entre versões do 1Doc, o padrão adotado é classificar pelo **texto** dos selos do despacho:
+
+```javascript
+function classificarStatusAssinatura(caixa) {
+    // Só selos — varrer caixa.innerText daria falso positivo com nome de anexo
+    // ("contrato assinado.pdf", "oficio_cancelamento.pdf").
+    const candidatos = caixa.querySelectorAll('.btn-group.pull-right, .badge, .label');
+    let alvo = '';
+    candidatos.forEach(el => { alvo += ' ' + (el.innerText || el.textContent || ''); });
+    alvo = alvo.toLowerCase();
+
+    if (alvo.includes('cancelad')) return 'cancelado'; // antes de 'assinado'
+    if (alvo.includes('assinado')) return 'assinado';
+    return 'pendente';
+}
+```
+
+Detalhes que evitam retrabalho:
+
+* **Testar `cancelad` antes de `assinado`** — o texto do cancelamento cita assinatura.
+* **Usar o radical `cancelad`**, que casa "Cancelada"/"Cancelado" mas **não** um botão de ação "Cancelar" (que casaria com `cancela`).
+* **O cancelamento também gera um despacho próprio** na timeline ("*Fulano realizou o cancelamento da solicitação de assinatura de…*"). Ele não contém "solicitou a assinatura de", então filtros por essa frase já o ignoram — não contabilize esse despacho como uma solicitação, ou o total dobra.
+* Para efeito de triagem, **cancelada equivale a concluída**: não bloqueia arquivamento nem justifica marcador de pendência.
+
 ### Ações de Barra Flutuante e Modais
 * **Botão "Arquivar + Parar de acompanhar":** `.botao_flutuante_4.bf_v_7` ou o fallback seguro `button[title*="Arquivar"][title*="Parar de acompanhar"]`.
 * **Botão "Responder":** `button.bf_v_1` — abre o formulário de resposta com Select2 de destinatário e TinyMCE.
