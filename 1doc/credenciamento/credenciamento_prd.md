@@ -9,7 +9,7 @@
 **Domínio (`@match`):** `https://*.1doc.com.br/*`
 **Permissões (`@grant`):** `GM_addStyle`
 **Update/Download URL:** `https://raw.githubusercontent.com/raulfranca/scripts/main/1doc/credenciamento/credenciamento.user.js`
-**Versão atual:** `0.7.0`
+**Versão atual:** `0.7.1`
 **Changelog:** [credenciamento_changelog.md](credenciamento_changelog.md)
 
 > **Versionamento:** este campo reflete o que está publicado (branch `main`) **deste script** — cada script da pasta tem sua própria linha SemVer e seu próprio changelog. Alterado somente mediante instrução explícita do usuário — nunca por iniciativa do agente de IA.
@@ -223,8 +223,8 @@ A função `prepararDadosClipboard()` lê diretamente das variáveis de estado d
 | S | Celular | Só dígitos | `celularDigitos` |
 | T | Banco | **Literal fixo** `Santander` | — |
 | U | Chave Pix | CPF (só dígitos); **vazia se o CPF for anulado** (`00000000000`) | `cpfDigitos` |
-| V | Agência Santander | Texto (preserva zeros à esquerda; `mso-number-format` no HTML) | `agenciaSantander` |
-| W | Conta Santander | Texto (preserva zeros à esquerda; `mso-number-format` no HTML) | `contaSantander` |
+| V | Agência Santander | Texto (preserva zeros à esquerda; `data-sheets-value` tipo string no HTML) | `agenciaSantander` |
+| W | Conta Santander | Texto no formato `XXXXXXXX-X` (com hífen; preserva zeros à esquerda; `data-sheets-value` tipo string no HTML) | `contaSantander` (formatado na cópia) |
 | X | Nome do titular da conta | = nome do candidato | `candidato` |
 | Y | PIS/PASEP/NIT/NIS | Só dígitos | `pisDigitos` |
 | Z | Educação Básica | `Educação Básica` ou vazio | `funcoesSelecionadas` (valor interno `Ed. Básica`) |
@@ -236,7 +236,7 @@ A função `prepararDadosClipboard()` lê diretamente das variáveis de estado d
 
 Regras de transformação:
 * **Banco/Pix:** coluna T é sempre o literal `Santander`; coluna U é o CPF do candidato (o campo "Chave Pix" foi removido do formulário), **exceto** quando o CPF foi anulado deliberadamente com 11 zeros (`00000000000`), caso em que a coluna U fica vazia.
-* **Agência/Conta:** gravadas como texto; as células V e W recebem `style="mso-number-format:'@'"` no `text/html` para o Google Sheets tratá-las como texto e não descartar zeros à esquerda.
+* **Agência/Conta:** gravadas como texto. A conta é copiada **com o hífen** (`01087578-8`), igual ao exibido no campo. As células V e W recebem no `text/html` o atributo `data-sheets-value='{"1":2,"2":"<valor>"}'` (tipo string, o mesmo que o Google Sheets grava ao copiar), que força a célula a ser colada como **texto**, preservando zeros à esquerda e hífen. O `style="mso-number-format:'@'"` é mantido apenas como fallback para Excel — sozinho, o Sheets não o respeita.
 * **Funções:** Mapeamento explícito de rótulos internos (`Ed. Básica`→`Educação Básica`, `Ed. Física`→`Educação Física`, `Artes`→`Artes`).
 * **Regiões:** Número inteiro (1–5) se selecionado, vazio se não.
 * **Documentos:** Valores minúsculos (`sim`/`não`) conforme validação de dados da planilha.

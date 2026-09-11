@@ -1,7 +1,7 @@
 ﻿// ==UserScript==
 // @name         1Doc - Credenciamento de Professores
 // @namespace    http://tampermonkey.net/
-// @version      0.7.0
+// @version      0.7.1
 // @description  Painel de conferência de credenciamento: extrai dados, aplica marcador e copia para planilha.
 // @author       Raul Cabral
 // @match        https://*.1doc.com.br/*
@@ -2698,6 +2698,11 @@
         // Chave Pix = CPF, exceto quando o CPF foi anulado deliberadamente com 11 zeros.
         const chavePix = cpfDigitos === '00000000000' ? '' : cpfDigitos;
 
+        // Conta vai para a planilha no mesmo formato exibido no campo (XXXXXXXX-X), com o hífen.
+        const contaFormatada = contaSantander.length > 8
+            ? contaSantander.slice(0, 8) + '-' + contaSantander.slice(8)
+            : contaSantander;
+
         const cells = [
             credenciadoraSalva,     // 0  A  — Analisado por
             dataEnvio,              // 1  B  — Data e hora
@@ -2721,7 +2726,7 @@
             'Santander',            // 19 T  — Banco (sempre Santander)
             chavePix,               // 20 U  — Chave Pix (= CPF; vazia se CPF anulado com 11 zeros)
             agenciaSantander,       // 21 V  — Agência Santander (texto, preserva zeros à esquerda)
-            contaSantander,         // 22 W  — Conta Santander (texto, preserva zeros à esquerda)
+            contaFormatada,         // 22 W  — Conta Santander com hífen (XXXXXXXX-X; texto, preserva zeros à esquerda)
             candidato,              // 23 X  — Nome do titular da conta (= nome do candidato)
             pisDigitos,             // 24 Y  — PIS/PASEP/NIT/NIS
             colF,                   // 25 Z  — Educação Básica
@@ -2734,12 +2739,17 @@
 
         const textData = cells.join('\t');
 
-        // Colunas cujos zeros à esquerda são significativos (agência V e conta W):
-        // força formato de texto no Google Sheets via mso-number-format para não virar número.
+        // Colunas cujos zeros à esquerda / hífen são significativos (agência V e conta W):
+        // força tipo TEXTO no Google Sheets via data-sheets-value ({"1":2,"2":"..."} = string),
+        // o mesmo atributo que o próprio Sheets grava ao copiar. O mso-number-format sozinho
+        // não é respeitado pelo Sheets (só pelo Excel) — fica como fallback.
         const COLS_TEXTO = new Set([21, 22]);
         const htmlCells = cells.map((val, i) => {
             if (i === 4 && url) return `<td><a href="${escapeHtml(url)}">${escapeHtml(val)}</a></td>`;
-            if (COLS_TEXTO.has(i)) return `<td style="mso-number-format:'\\@'">${escapeHtml(val)}</td>`;
+            if (COLS_TEXTO.has(i)) {
+                const sheetsVal = escapeHtml(JSON.stringify({ 1: 2, 2: String(val ?? '') }));
+                return `<td data-sheets-value="${sheetsVal}" style="mso-number-format:'\\@'">${escapeHtml(val)}</td>`;
+            }
             return `<td>${escapeHtml(val)}</td>`;
         }).join('');
         const htmlData = `<!DOCTYPE html><html><body><table><tr>${htmlCells}</tr></table></body></html>`;

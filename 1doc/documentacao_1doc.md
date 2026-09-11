@@ -397,12 +397,13 @@ const htmlData = `<table><tr>${htmlCells}</tr></table>`;
 >
 > O `<textarea>` selecionado serve apenas para fazer o `execCommand('copy')` disparar o evento `copy`; o conteúdo real (html + plain) vem do listener via `clipboardData`.
 
-> **Preservar zeros à esquerda no Google Sheets (`mso-number-format`).** Valores numéricos como texto (agência `0056`, conta `00123456-7`) são convertidos em número pelo Sheets ao colar, perdendo os zeros à esquerda. Para forçar o Sheets a tratar a célula como **texto**, aplique o estilo `mso-number-format` (herdado do clipboard HTML do Excel, respeitado pelo Sheets) na `<td>`:
+> **Preservar zeros à esquerda / hífen no Google Sheets (`data-sheets-value`).** Valores numéricos como texto (agência `0056`, conta `00123456-7`) são convertidos em número pelo Sheets ao colar, perdendo os zeros à esquerda. **`mso-number-format:'@'` sozinho NÃO resolve** — o Sheets ignora esse estilo (é convenção do Excel); foi a primeira tentativa no `credenciamento.user.js` e falhou em produção (2026-09-11). O que o Sheets respeita é o atributo que ele mesmo grava no clipboard ao copiar: `data-sheets-value`, um JSON onde `"1"` é o tipo (`2` = string, `3` = número) e `"2"` é o valor string:
 > ```javascript
-> // '\@' = formato "texto"; escapar a barra invertida na template string → "mso-number-format:'\\@'"
-> `<td style="mso-number-format:'\\@'">${escapeHtml(val)}</td>`
+> // escapeHtml precisa escapar aspas duplas — o JSON vai dentro do atributo
+> const sheetsVal = escapeHtml(JSON.stringify({ 1: 2, 2: String(val) }));
+> `<td data-sheets-value="${sheetsVal}" style="mso-number-format:'\\@'">${escapeHtml(val)}</td>`
 > ```
-> Aplique apenas nas colunas onde o zero à esquerda é significativo (agência, conta) — não em todas, para não desabilitar cálculos legítimos na planilha. O `text/plain` (TSV) não carrega formatação; a preservação depende do `text/html`, então o Sheets precisa colar o rich text (ver ponto 2 acima).
+> Manter o `mso-number-format` junto custa nada e cobre a colagem em Excel. Aplique apenas nas colunas onde o zero à esquerda é significativo (agência, conta) — não em todas, para não desabilitar cálculos legítimos na planilha. O `text/plain` (TSV) não carrega formatação; a preservação depende do `text/html`, então o Sheets precisa colar o rich text (ver ponto 2 acima).
 
 ### 5.5 Automação de Modais (Interceptação Rápida)
 Quando o script clica em um botão nativo (como Arquivar ou Enviar resposta), o 1Doc abre um modal com animação. Use este snippet para interceptar e confirmar o modal invisivelmente:

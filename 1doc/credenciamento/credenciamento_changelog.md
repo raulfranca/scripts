@@ -11,6 +11,13 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+## [0.7.1] — 2026-09-11
+
+### Corrigido
+
+- **Agência e conta Santander passam a colar no Google Sheets como texto (`prepararDadosClipboard`):** o `mso-number-format:'@'` usado nas células V e W não é respeitado pelo Sheets, que convertia os valores em número e descartava os zeros à esquerda (`0307` → `307`). As duas células agora recebem também o atributo `data-sheets-value='{"1":2,"2":"<valor>"}'` (tipo string), que é o formato nativo que o próprio Sheets grava ao copiar e lê de volta ao colar. O `mso-number-format` fica como fallback para Excel.
+- **Conta Santander copiada com o hífen:** a coluna W ia com os 9 dígitos crus (`010875788`); agora vai no mesmo formato exibido no campo, `XXXXXXXX-X` (`01087578-8`). A variável de estado `contaSantander` continua guardando só os dígitos — a formatação é feita na montagem das células.
+
 ## [0.7.0] — 2026-08-12
 
 ### Alterado

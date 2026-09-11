@@ -32,10 +32,29 @@
       "Bash(curl -s -I \"https://raw.githubusercontent.com/raulfranca/scripts/350c7937ad91dd6814c6fd7bd4c211d75c2b6560/1doc/credenciamento/ref/horas-trabalhadas_2026-07-01_a_2026-07-31.xlsx\")",
       "Bash(ls \"C:/Users/rfranca/.claude/projects/c--dev-scripts/memory/\")",
       "Read(//c/Users/rfranca/.claude/projects/c--dev-scripts/memory/**)",
-      "Bash(node --check sme_ass.user.js)"
+      "Bash(node --check sme_ass.user.js)",
+      "Bash(node --check \"c:/dev/scripts/1doc/credenciamento/credenciamento.user.js\")",
+      "Read(//c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/**)",
+      "Bash(sort -t: -k2 -nr)",
+      "Read(//c/Users/rfranca/AppData/Local/Temp/claude/c--dev-scripts/28866784-5461-4875-935f-939c3d7ef5e9/scratchpad/**)",
+      "Bash(python desminificar.py \"/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.html\" saida.html)",
+      "Bash(f=\"/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.html\"; grep -o 'inline-block\\\\|display:inline[^;}]*\\\\|white-space:pre[^;}]*' \"$f\" | sort | uniq -c; echo \"\\(vazio = nenhum\\)\")",
+      "Bash(cp '/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.html' '/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.min.html')",
+      "Bash(python /c/Users/rfranca/AppData/Local/Temp/claude/c--dev-scripts/28866784-5461-4875-935f-939c3d7ef5e9/scratchpad/desminificar.py '/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.min.html' '/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.html')",
+      "Bash(cd \"/c/Users/rfranca/AppData/Local/Temp/claude/c--dev-scripts/28866784-5461-4875-935f-939c3d7ef5e9/scratchpad\" *)",
+      "Bash(python -m pip install --user --quiet pypdf)",
+      "Bash(python -c \"import pypdf; print\\(pypdf.__version__\\)\")",
+      "Bash(python comparar.py)",
+      "Bash(grep -n 'var pronto\\\\|pronto.then' \"/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.html\")",
+      "Bash(rm -f \"/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/_debug.html\")",
+      "Bash(node cdp.mjs 'file:///C:/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.html' ' *)",
+      "Bash(grep -n 'max-width:820px' -A 7 \"/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.html\" | head -12; grep -n \"atual.parentNode.replaceChild\\(out, atual\\)\" \"/c/Users/rfranca/Meu Drive/eOuve/relatorios/infraestrutura/Infraestrutura_2026-09-11.html\")",
+      "PowerShell($f='c:\\\\Users\\\\rfranca\\\\Meu Drive\\\\eOuve\\\\relatorios\\\\infraestrutura\\\\Infraestrutura_2026-09-11.html'; $l=Get-Content $f; $l[24]; $l[140].Substring\\(0,[Math]::Min\\(300,$l[140].Length\\)\\); $l[140].Length; \\(Get-Item 'C:\\\\Users\\\\rfranca\\\\Meu Drive\\\\brasao-branco.png'\\).Length)",
+      "PowerShell($f='c:\\\\Users\\\\rfranca\\\\Meu Drive\\\\eOuve\\\\relatorios\\\\infraestrutura\\\\Infraestrutura_2026-09-11.html'; $b64=[Convert]::ToBase64String\\([IO.File]::ReadAllBytes\\('C:\\\\Users\\\\rfranca\\\\Meu Drive\\\\brasao-branco.png'\\)\\); $c=[IO.File]::ReadAllText\\($f,[Text.Encoding]::UTF8\\); $n=[regex]::Replace\\($c,'\\(<img class=\"brasao\" src=\"\\)data:image/[a-z]+;base64,[A-Za-z0-9+/=]+',{param\\($m\\) $m.Groups[1].Value+'data:image/png;base64,'+$b64},1\\); if\\($n -eq $c\\){'NO CHANGE'}else{[IO.File]::WriteAllText\\($f,$n,\\(New-Object Text.UTF8Encoding $false\\)\\); 'OK'}; \\(Get-Content $f\\)[140].Substring\\(0,60\\))"
     ],
     "additionalDirectories": [
-      "\\tmp"
+      "\\tmp",
+      "c:\\Users\\rfranca\\Meu Drive\\eOuve\\relatorios\\infraestrutura"
     ]
   }
 }

@@ -236,8 +236,8 @@ observerUI (MutationObserver)
 | S | Celular (apenas dígitos) |
 | T | Banco (literal fixo `Santander`) |
 | U | Chave Pix (= CPF, apenas dígitos; vazia se CPF anulado com 11 zeros) |
-| V | Agência Santander (`agenciaSantander`, texto — formato texto no Sheets p/ preservar zeros) |
-| W | Conta Santander (`contaSantander`, texto — formato texto no Sheets p/ preservar zeros) |
+| V | Agência Santander (`agenciaSantander`, texto — `data-sheets-value` tipo string p/ preservar zeros) |
+| W | Conta Santander (`contaSantander` formatado `XXXXXXXX-X` com hífen, texto — `data-sheets-value` tipo string p/ preservar zeros) |
 | X | Nome do titular da conta (= nome do candidato) |
 | Y | PIS/PASEP/NIT/NIS (apenas dígitos) |
 | Z | `Educação Básica` (se selecionada, senão vazio) |
