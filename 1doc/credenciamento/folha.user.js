@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1Doc - Folha de Frequência (Credenciamento)
 // @namespace    http://tampermonkey.net/
-// @version      0.2.0
+// @version      0.2.1
 // @description  Destaca protocolos da folha de frequência no inbox do 1Doc e gerencia a coleta das fichas.
 // @author       Raul Cabral
 // @match        https://pindamonhangaba.1doc.com.br/*
@@ -237,7 +237,7 @@
         };
     }
 
-    // Orquestra a leitura: localiza o cabeçalho, mapeia colunas por nome, filtra horas > 0, deduplica por protocolo
+    // Orquestra a leitura: localiza o cabeçalho, mapeia colunas por nome, filtra horas ≠ 0, deduplica por protocolo
     async function parsearPlanilha(file) {
         if (!window.DecompressionStream) {
             throw new Error('Navegador sem suporte à leitura de .xlsx (é necessário Chrome/Edge 103+).');
@@ -300,8 +300,13 @@
 
             total++;
 
-            const horas = parseFloat(get('horas').replace(',', '.')) || 0;
-            if (horas <= 0) { descartados++; return; } // decisão do usuário: só importa quem trabalhou
+            // Decisão do usuário: importa toda linha cuja coluna de horas seja diferente de zero — inclusive
+            // valores textuais como "Bloco de aulas" (parseFloat daria NaN e a linha seria descartada por engano).
+            // Só descarta célula vazia ou numericamente igual a zero.
+            const horasTxt = get('horas');
+            const horasNum = Number(horasTxt.replace(',', '.'));
+            if (horasTxt === '' || horasNum === 0) { descartados++; return; }
+            const horas = Number.isFinite(horasNum) ? horasNum : horasTxt;
 
             vistos.add(numero);
             registros.push({
@@ -712,7 +717,7 @@
         }
 
         if (resultado.registros.length === 0) {
-            msgEl.textContent = 'Nenhum professor com horas trabalhadas > 0 encontrado nesta planilha.';
+            msgEl.textContent = 'Nenhum professor com horas trabalhadas diferentes de zero encontrado nesta planilha.';
             msgEl.style.color = '#c0392b';
             return;
         }
@@ -1002,7 +1007,7 @@
                 nomeEl.textContent = nome || '—';
                 const numEl = document.createElement('div');
                 numEl.style.cssText = 'font-size:11px;color:#888;font-family:monospace;';
-                numEl.textContent = numero + (horas ? ` · ${horas}h` : '');
+                numEl.textContent = numero + (horas ? ` · ${typeof horas === 'number' ? horas + 'h' : horas}` : '');
                 info.appendChild(nomeEl);
                 info.appendChild(numEl);
 

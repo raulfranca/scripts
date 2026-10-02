@@ -606,6 +606,7 @@ async function inflar(bytesComprimidos) {
   }
   ```
 * **Hyperlinks não ficam na célula** — a sheet tem `<hyperlinks><hyperlink ref="B4" r:id="rId1"/></hyperlinks>` e o `.rels` irmão (`xl/worksheets/_rels/sheetN.xml.rels`) resolve `rId1` → URL real via `<Relationship Id="rId1" Target="https://..."/>`. Sem juntar os dois arquivos, o link se perde.
+* **Coluna "numérica" pode conter texto** — na planilha de horas trabalhadas, algumas linhas trazem `Bloco de aulas` (célula `inlineStr`) em vez de um número. `parseFloat(...) || 0` transforma isso em `0` e descarta a linha silenciosamente. Para filtros do tipo "diferente de zero", teste o texto: descarte só célula vazia ou `Number(txt) === 0`, e preserve o texto original quando não for numérico.
 * **Não assumir número de linha fixo para o cabeçalho** — arquivos exportados de sistemas costumam ter linhas de título mescladas (`<mergeCell ref="A1:O1"/>`) antes do cabeçalho real. Localize a linha de cabeçalho pelo **conteúdo** (ex: primeira linha cujas células contêm os nomes de coluna esperados), não por posição.
 
 **4. `DOMParser('application/xml')` para o XML interno** — mesmo tratamento de qualquer XML no navegador; tags sem prefixo (`row`, `c`, `v`, `t`, `si`, `is`) são acessíveis via `getElementsByTagName` direto; atributos prefixados (`r:id` em `<hyperlink r:id="rId1"/>`) via `getAttribute('r:id')` (a forma não-namespace-aware casa a string qualificada como está na origem, sem precisar de `getAttributeNS`).

@@ -11,6 +11,12 @@ e este projeto adota [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
 ## [Não publicado]
 
+## [0.2.1] — 2026-10-02
+
+### Corrigido
+
+- **Import descartava linhas com texto na coluna "Horas trabalhadas" (`parsearPlanilha`):** valores como `Bloco de aulas` viravam `0` via `parseFloat(...) || 0` e a linha era contada como "sem horas trabalhadas". Agora é importada toda linha cuja coluna de horas seja **diferente de zero** — só são descartadas células vazias ou numericamente iguais a zero. Valores textuais são preservados em `horas` (string) e exibidos como estão no modal "👁 Ver lista" (números continuam com sufixo `h`). Ex.: a planilha de setembro (PEB Arte e EF) passa de 96 para 104 importados.
+
 ## [0.2.0] — 2026-08-04 — Importa planilha XLS e localiza protocolos via hyperlinks
 
 ### Adicionado
