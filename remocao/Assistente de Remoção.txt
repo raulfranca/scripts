@@ -1,0 +1,269 @@
+// ==UserScript==
+// @name         Painel de Oportunidades de Remoção (Smart Dashboard)
+// @namespace    http://tampermonkey.net/
+// @version      2.0
+// @description  Analisa vagas vs. concorrência e mostra chances reais na tela
+// @author       Você
+// @match        *://educ.apus.info/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    // --- CONFIGURAÇÃO DE ESTILO (CSS) ---
+    const styles = `
+        #dash-container { position: fixed; top: 10px; right: 10px; width: 300px; z-index: 99999; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        #dash-box { background: #fff; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); overflow: hidden; border: 1px solid #ddd; }
+        #dash-header { background: #2c3e50; color: white; padding: 15px; font-weight: bold; font-size: 16px; display: flex; justify-content: space-between; align-items: center; }
+        #dash-body { padding: 15px; max-height: 400px; overflow-y: auto; }
+        .dash-btn { width: 100%; padding: 10px; background: #27ae60; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; transition: 0.3s; margin-bottom: 10px; }
+        .dash-btn:hover { background: #219150; }
+        .dash-btn:disabled { background: #95a5a6; cursor: not-allowed; }
+        .dash-info { font-size: 13px; color: #555; margin-bottom: 10px; background: #f8f9fa; padding: 8px; border-radius: 4px; border-left: 4px solid #3498db; }
+        .status-log { font-size: 12px; color: #7f8c8d; margin-top: 5px; }
+
+        /* Estilo da Tabela de Resultados (Modal) */
+        #result-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 80%; max-width: 900px; height: 80%; background: white; z-index: 100000; box-shadow: 0 0 50px rgba(0,0,0,0.5); border-radius: 8px; flex-direction: column; }
+        #result-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        #result-content { flex: 1; overflow-y: auto; padding: 20px; }
+        .res-table { width: 100%; border-collapse: collapse; }
+        .res-table th, .res-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        .res-table th { background-color: #f8f9fa; color: #333; position: sticky; top: 0; }
+        .res-row-success { background-color: #d4edda; color: #155724; }
+        .res-row-warning { background-color: #fff3cd; color: #856404; }
+        .badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .badge-green { background: #28a745; color: white; }
+        .close-btn { background: none; border: none; font-size: 24px; cursor: pointer; color: #aaa; }
+        .close-btn:hover { color: #333; }
+        .overlay-bg { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 99998; }
+    `;
+
+    // Injeta CSS
+    const styleSheet = document.createElement("style");
+    styleSheet.innerText = styles;
+    document.head.appendChild(styleSheet);
+
+    // --- INTERFACE PRINCIPAL ---
+    const container = document.createElement('div');
+    container.id = 'dash-container';
+    container.innerHTML = `
+        <div id="dash-box">
+            <div id="dash-header">
+                <span>🤖 Assistente de Remoção</span>
+            </div>
+            <div id="dash-body">
+                <div id="user-rank-display" class="dash-info">Carregando classificação...</div>
+                <button id="btn-analyze" class="dash-btn">🔍 Analisar Minhas Chances</button>
+                <div id="status-msg" class="status-log">Pronto para iniciar.</div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(container);
+
+    // --- INTERFACE MODAL (RESULTADOS) ---
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay-bg';
+    document.body.appendChild(overlay);
+
+    const modal = document.createElement('div');
+    modal.id = 'result-modal';
+    modal.innerHTML = `
+        <div id="result-header">
+            <h2 style="margin:0">🏫 Escolas com Chance de Entrada</h2>
+            <button class="close-btn" id="close-modal">&times;</button>
+        </div>
+        <div id="result-content">
+            <table class="res-table">
+                <thead>
+                    <tr>
+                        <th>Escola</th>
+                        <th>Vagas</th>
+                        <th>Sua Posição Real</th>
+                        <th>Concorrentes Melhores</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="res-tbody"></tbody>
+            </table>
+        </div>
+    `;
+    document.body.appendChild(modal);
+
+    // Fechar Modal
+    document.getElementById('close-modal').addEventListener('click', () => {
+        modal.style.display = 'none';
+        overlay.style.display = 'none';
+    });
+
+    // --- FUNÇÕES DE LÓGICA ---
+
+    const clean = (text) => text ? text.replace(/\s+/g, ' ').trim() : "";
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    // Busca a classificação do usuário na página
+    const getMyClassification = () => {
+        const tds = Array.from(document.querySelectorAll('td'));
+        // Procura celula que tenha o texto "Classificação:"
+        const rankTd = tds.find(td => td.innerText.includes('Classificação:'));
+        if (rankTd) {
+            // Extrai apenas os números
+            const match = rankTd.innerText.match(/Classificação:\s*(\d+)/i); // Regex ajustado para pegar depois dos dois pontos
+             if (match && match[1]) return parseInt(match[1]);
+            // Tenta pegar o texto solto caso o regex falhe
+             const numbers = rankTd.innerText.replace(/\D/g, '');
+             return parseInt(numbers);
+        }
+        return null;
+    };
+
+    // Espera inteligente
+    const waitForContent = async (row, timeout = 5000) => {
+        const checkInterval = 200;
+        let elapsed = 0;
+        while (elapsed < timeout) {
+            const nextRow = row.nextElementSibling;
+            if (nextRow && nextRow.classList.contains('no-padding')) {
+                const slider = nextRow.querySelector('.slider');
+                const table = nextRow.querySelector('.grid-slider');
+                if (slider && table && slider.style.display !== 'none') return nextRow;
+            }
+            await wait(checkInterval);
+            elapsed += checkInterval;
+        }
+        return null;
+    };
+
+    // --- SETUP INICIAL ---
+    const myRank = getMyClassification();
+    const rankDisplay = document.getElementById('user-rank-display');
+
+    if (myRank) {
+        rankDisplay.innerHTML = `Sua Classificação: <b>${myRank}</b>`;
+        rankDisplay.style.borderLeftColor = "#27ae60";
+    } else {
+        rankDisplay.innerHTML = `⚠️ Não achei sua classificação na tela.`;
+        rankDisplay.style.borderLeftColor = "#e74c3c";
+    }
+
+    // --- LÓGICA DE ANÁLISE ---
+    const runAnalysis = async () => {
+        const btn = document.getElementById('btn-analyze');
+        const status = document.getElementById('status-msg');
+        const userRank = myRank || parseInt(prompt("Não detectei sua classificação. Digite-a manualmente (apenas números):"));
+
+        if (!userRank) return;
+
+        btn.disabled = true;
+        btn.innerText = "Analisando...";
+        status.innerText = "Iniciando varredura...";
+
+        const rows = document.querySelectorAll('tr[role="row"]');
+        let opportunities = [];
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            status.innerText = `Analisando escola ${i + 1} de ${rows.length}...`;
+
+            // Dados da escola
+            let nomeEscola = "Desconhecida";
+            let vagas = 0;
+
+            try {
+                if(row.cells[0]) nomeEscola = clean(row.cells[0].innerText);
+                if(row.cells[1]) vagas = parseInt(clean(row.cells[1].innerText)) || 0;
+            } catch(e) {}
+
+            // Se não tem vagas, nem perde tempo abrindo (Otimização)
+            if (vagas === 0) {
+                continue;
+            }
+
+            // Abre "Interessados"
+            const btnInteressados = row.querySelector('.img-inscritos');
+            let melhoresQueEu = 0;
+            let totalInteressados = 0;
+
+            if (btnInteressados) {
+                btnInteressados.click();
+                const details = await waitForContent(row, 6000);
+
+                if (details) {
+                    const tBody = details.querySelector('.grid-slider tbody');
+                    if (tBody) {
+                        const competitors = tBody.querySelectorAll('tr');
+                        totalInteressados = competitors.length;
+
+                        competitors.forEach(comp => {
+                            // Coluna da classificação do concorrente (Índice 3 conforme script anterior)
+                            const cols = comp.querySelectorAll('td');
+                            if (cols.length >= 4) {
+                                const rankText = clean(cols[3].innerText);
+                                const rankComp = parseInt(rankText);
+                                if (!isNaN(rankComp) && rankComp < userRank) {
+                                    melhoresQueEu++;
+                                }
+                            }
+                        });
+                    }
+                }
+                // Fecha para limpar visual (opcional)
+               // btnInteressados.click();
+               // await wait(50);
+            }
+
+            // Lógica de Oportunidade
+            // Vagas Disponíveis para mim = Vagas Totais - Pessoas na minha frente
+            const minhaPosicaoReal = melhoresQueEu + 1;
+            const chance = minhaPosicaoReal <= vagas;
+
+            if (chance) {
+                opportunities.push({
+                    escola: nomeEscola,
+                    vagas: vagas,
+                    posicao: minhaPosicaoReal,
+                    concorrentesFortes: melhoresQueEu,
+                    totalConcorrentes: totalInteressados
+                });
+            }
+        }
+
+        // --- EXIBIR RESULTADOS ---
+        status.innerText = `Análise completa! ${opportunities.length} oportunidades encontradas.`;
+        btn.disabled = false;
+        btn.innerText = "🔍 Analisar Novamente";
+
+        renderResults(opportunities);
+    };
+
+    const renderResults = (data) => {
+        const tbody = document.getElementById('res-tbody');
+        tbody.innerHTML = '';
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">Nenhuma escola encontrada onde sua classificação garanta a vaga no momento. 😔</td></tr>';
+        } else {
+            // Ordenar: Primeiro as que tem mais vagas sobrando
+            data.sort((a, b) => (a.posicao - a.vagas) - (b.posicao - b.vagas));
+
+            data.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.className = 'res-row-success';
+                tr.innerHTML = `
+                    <td><b>${item.escola}</b><br><small style="color:#666">${item.totalConcorrentes} inscritos no total</small></td>
+                    <td style="font-size:16px; font-weight:bold;">${item.vagas}</td>
+                    <td><span class="badge badge-green">${item.posicao}º lugar</span></td>
+                    <td>${item.concorrentesFortes}</td>
+                    <td><b>Dentro das Vagas</b> ✅</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        modal.style.display = 'flex';
+        overlay.style.display = 'block';
+    };
+
+    document.getElementById('btn-analyze').addEventListener('click', runAnalysis);
+
+})();

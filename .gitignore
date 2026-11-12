@@ -7,3 +7,6 @@
 
 # Exports do próprio script (folha-frequencia-*.json contém a lista de professores)
 folha-frequencia-*.json
+
+# Mockups do brainstorming (visual companion)
+.superpowers/

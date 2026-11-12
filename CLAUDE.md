@@ -18,6 +18,7 @@ scripts/
         ├── folha.user.js + folha_changelog.md
         ├── desconcluir.user.js + desconcluir_changelog.md
         └── educafacil.user.js + educafacil_changelog.md
+└── remocao/                          # Só histórico: v1 (TamperMonkey). A v2 mora em raulfranca/praqualescola
 ```
 
 O versionamento/backup é feito pelo Git (branch `dev` → merge para `main` para publicar).
